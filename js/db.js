@@ -65,3 +65,25 @@ export async function remove(store, id) {
     r.onerror = () => reject(r.error);
   });
 }
+
+const EXPORT_VERSION = 1;
+
+export async function exportAll() {
+  const data = {};
+  for (const name of STORES) data[name] = await getAll(name);
+  return { version: EXPORT_VERSION, exportedAt: new Date().toISOString(), data };
+}
+
+export async function importAll(obj) {
+  if (!obj || obj.version !== EXPORT_VERSION || !obj.data) {
+    throw new Error('インポート形式が不正です');
+  }
+  for (const name of STORES) {
+    const rows = obj.data[name];
+    if (!Array.isArray(rows)) throw new Error(`データが不足: ${name}`);
+    for (const row of rows) {
+      if (!row || typeof row.id === 'undefined') throw new Error(`id欠損: ${name}`);
+      await put(name, row);
+    }
+  }
+}
