@@ -6,6 +6,8 @@ import { escapeHtml } from './exercises.js';
 const INTERVAL_SEC = 90;
 let timer;
 
+export const SENSORY_TAGS = ['調子良い', '腹圧抜けた', 'フォーム崩れ', '対象筋に効いた', '関節に違和感', '軽く感じた'];
+
 export async function renderWorkout(el) {
   const exercises = await getAll('exercises');
   const allSets = await getAll('sets');
@@ -43,6 +45,12 @@ export async function renderWorkout(el) {
           <button data-v="partial">部分</button>
           <button data-v="cheating">チーティング</button>
         </div></div>
+      <div class="field"><label>定型タグ（複数可）</label>
+        <div id="w-tags">
+          ${SENSORY_TAGS.map((t) => `<button type="button" class="chip chip-tag" data-tag="${t}">${t}</button>`).join('')}
+        </div></div>
+      <div class="field"><label>メモ（任意）</label>
+        <input id="w-note" class="input" placeholder="例: 3セット目から効きが浅い" /></div>
       <div id="w-error" class="error"></div>
       <button id="w-save" class="btn btn-primary btn-block">セット記録 + インターバル開始</button>
     </div>
@@ -52,7 +60,7 @@ export async function renderWorkout(el) {
     </div>
     <div class="card"><strong>本日のセット</strong><div id="w-today"></div></div>`;
 
-  const state = { core: null, load: null, rom: 'full' };
+  const state = { core: null, load: null, rom: 'full', tags: new Set(), note: '' };
 
   function refreshPR() {
     const exId = el.querySelector('#w-ex').value;
@@ -78,6 +86,13 @@ export async function renderWorkout(el) {
   bindSeg(el, '#w-core', (v) => (state.core = v));
   bindSeg(el, '#w-load', (v) => (state.load = v));
   bindSeg(el, '#w-rom', (v) => (state.rom = v), 'full');
+  el.querySelectorAll('#w-tags .chip-tag').forEach((b) =>
+    b.addEventListener('click', () => {
+      const t = b.dataset.tag;
+      if (state.tags.has(t)) { state.tags.delete(t); b.classList.remove('sel'); }
+      else { state.tags.add(t); b.classList.add('sel'); }
+    }));
+  el.querySelector('#w-note').addEventListener('input', (e) => (state.note = e.target.value));
 
   timer = createTimer({
     onTick: (s) => (el.querySelector('#w-timer').textContent = formatTime(s)),
@@ -105,8 +120,13 @@ export async function renderWorkout(el) {
     await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight, reps,
       estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: Date.now() });
     const score = sensoryScore({ core: state.core, muscleLoad: state.load, rom: state.rom });
-    await put('sensoryLogs', { id: uid(), setId, core: state.core, muscleLoad: state.load, rom: state.rom, score });
+    await put('sensoryLogs', { id: uid(), setId, core: state.core, muscleLoad: state.load,
+      rom: state.rom, score, note: state.note, tags: [...state.tags] });
     el.querySelector('#w-timer-card').style.display = 'block';
+    state.tags.clear();
+    state.note = '';
+    el.querySelectorAll('#w-tags .chip-tag').forEach((b) => b.classList.remove('sel'));
+    el.querySelector('#w-note').value = '';
     timer.start(INTERVAL_SEC);
     await renderToday(el, exercises);
   });
