@@ -2,12 +2,18 @@ import { renderHome } from './views/home.js';
 import { renderWorkout } from './views/workout.js';
 import { renderExercises } from './views/exercises.js';
 import { renderHistory } from './views/history.js';
+import { renderInsights } from './views/insights.js';
+import { renderReview } from './views/review.js';
+import { renderSettings } from './views/settings.js';
 
 const routes = {
   home: renderHome,
   workout: renderWorkout,
   exercises: renderExercises,
   history: renderHistory,
+  insights: renderInsights,
+  review: renderReview,
+  settings: renderSettings,
 };
 
 async function navigate(route) {
