@@ -1,8 +1,10 @@
-const CACHE = 'gachi-fit-v1';
+const CACHE = 'gachi-fit-v2';
 const ASSETS = [
   '.', 'index.html', 'css/style.css',
-  'js/app.js', 'js/db.js', 'js/timer.js', 'js/lib/calc.js',
-  'js/views/home.js', 'js/views/workout.js', 'js/views/exercises.js', 'js/views/history.js',
+  'js/app.js', 'js/db.js', 'js/timer.js',
+  'js/lib/calc.js', 'js/lib/chart.js', 'js/lib/insights.js',
+  'js/views/home.js', 'js/views/workout.js', 'js/views/exercises.js',
+  'js/views/history.js', 'js/views/insights.js', 'js/views/review.js', 'js/views/settings.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
