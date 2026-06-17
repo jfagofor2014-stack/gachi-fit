@@ -1,10 +1,12 @@
-const CACHE = 'gachi-fit-v2';
+const CACHE = 'gachi-fit-v3';
 const ASSETS = [
   '.', 'index.html', 'css/style.css',
   'js/app.js', 'js/db.js', 'js/timer.js',
   'js/lib/calc.js', 'js/lib/chart.js', 'js/lib/insights.js',
+  'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js',
   'js/views/home.js', 'js/views/workout.js', 'js/views/exercises.js',
   'js/views/history.js', 'js/views/insights.js', 'js/views/review.js', 'js/views/settings.js',
+  'js/views/body.js', 'js/views/more.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
