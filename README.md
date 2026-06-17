@@ -1,6 +1,6 @@
 # GACHI-FIT
 
-中・上級トレーニー向け「感覚同期型」トレーニング記録 PWA（Phase1）。
+中・上級トレーニー向け「感覚同期型」トレーニング記録 PWA。
 
 ## 機能
 - ハイパーカスタムメニュー（部位細分化・意識ポイント・セットパターン）
@@ -13,12 +13,24 @@
 - 推定1RM推移グラフ（自前SVG）
 - ワークアウト振り返り・セット編集/削除
 - データのエクスポート/インポート（JSON）
+- Gemini による AI インサイト（APIキーは端末内に保存）
+- 体形比較写真（IndexedDB保存・2枚並列比較）
+- 大会カウントダウン・目標体重トラッキング
+- セットパターンのカスタム管理
 
 ## 開発
 ```bash
 npm test                      # 純粋ロジックのユニットテスト
 python3 -m http.server 8765   # http://localhost:8765 で起動
 ```
+
+## 公開（GitHub Pages）
+リポジトリ Settings → Pages → Source を `main` / `(root)` に設定すると
+`https://jfagofor2014-stack.github.io/gachi-fit/` で公開される。
+
+## AI機能の利用
+[Google AI Studio](https://aistudio.google.com/apikey) でGemini APIキーを取得し、
+アプリの「その他 → 設定」で登録する。
 
 ## 構成
 - `js/lib/calc.js` 純粋ロジック / `js/db.js` IndexedDB / `js/timer.js` タイマー

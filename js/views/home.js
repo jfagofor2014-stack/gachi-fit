@@ -1,5 +1,6 @@
-import { getAll } from '../db.js';
+import { getAll, get } from '../db.js';
 import { computePRs } from '../lib/calc.js';
+import { daysUntil } from '../lib/countdown.js';
 import { escapeHtml } from './exercises.js';
 
 export async function renderHome(el) {
@@ -17,8 +18,15 @@ export async function renderHome(el) {
     .map(([id, v]) => `<div class="list-item"><span>${escapeHtml(nameOf(id))}</span>
       <span class="pr-badge">${v.toFixed(1)}kg</span></div>`).join('');
 
+  const goal = await get('goals', 'main');
+  const days = goal ? daysUntil(goal.competitionDate) : null;
+  const countdownCard = (days != null && days >= 0)
+    ? `<div class="card"><div class="muted">大会まで</div><div class="countdown">${days}<span style="font-size:24px">日</span></div></div>`
+    : '';
+
   el.innerHTML = `
     <h2 class="view-title">ホーム</h2>
+    ${countdownCard}
     <div class="card">
       <div class="muted">本日のセット数</div>
       <div class="timer-big" style="font-size:40px">${todayCount}</div>

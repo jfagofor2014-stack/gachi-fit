@@ -1,9 +1,9 @@
 import { getAll, put, remove, uid } from '../db.js';
 
-const SET_PATTERNS = ['通常', 'ピラミッド', 'ドロップ', 'レストポーズ'];
-
 export async function renderExercises(el) {
   const exercises = await getAll('exercises');
+  let patterns = (await getAll('setPatterns')).map((p) => p.name);
+  if (patterns.length === 0) patterns = ['通常'];
   el.innerHTML = `
     <h2 class="view-title">メニュー管理</h2>
     <div class="card">
@@ -15,14 +15,14 @@ export async function renderExercises(el) {
         <input id="ex-cues" class="input" placeholder="例: 肩甲骨下制, 腹圧" /></div>
       <div class="field"><label>セットパターン</label>
         <div class="seg" id="ex-pattern">
-          ${SET_PATTERNS.map((p, i) => `<button data-p="${p}" class="${i === 0 ? 'sel' : ''}">${p}</button>`).join('')}
+          ${patterns.map((p, i) => `<button data-p="${p}" class="${i === 0 ? 'sel' : ''}">${p}</button>`).join('')}
         </div></div>
       <div id="ex-error" class="error"></div>
       <button id="ex-save" class="btn btn-primary btn-block">種目を追加</button>
     </div>
     <div id="ex-list"></div>`;
 
-  let pattern = SET_PATTERNS[0];
+  let pattern = patterns[0];
   el.querySelectorAll('#ex-pattern button').forEach((b) =>
     b.addEventListener('click', () => {
       el.querySelectorAll('#ex-pattern button').forEach((x) => x.classList.remove('sel'));
