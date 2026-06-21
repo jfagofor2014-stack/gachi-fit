@@ -4,12 +4,13 @@ import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
 import { escapeHtml } from './exercises.js';
 import { renderCalendar } from './calendar.js';
+import { localDateStr } from '../lib/localdate.js';
 
 export async function renderHome(el) {
   const exercises = await getAll('exercises');
   const sets = await getAll('sets');
   const prs = computePRs(sets);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const workouts = await getAll('workouts');
   const todayWorkout = workouts.find((w) => w.date === today);
   const todayCount = todayWorkout ? sets.filter((s) => s.workoutId === todayWorkout.id).length : 0;

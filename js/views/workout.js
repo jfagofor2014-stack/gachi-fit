@@ -2,6 +2,7 @@ import { getAll, get, put, remove, uid } from '../db.js';
 import { estimate1RM, sensoryScore, computePRs } from '../lib/calc.js';
 import { createTimer, formatTime } from '../timer.js';
 import { formatMinutes } from '../lib/duration.js';
+import { localDateStr } from '../lib/localdate.js';
 import { escapeHtml } from './exercises.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
@@ -11,7 +12,7 @@ export const SENSORY_TAGS = ['調子良い', '腹圧抜けた', 'フォーム崩
 let intervalTimer;
 let durationTicker;
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateStr();
 
 // 連続呼び出しのread-modify-write競合を避けるため直列化する
 let patchQueue = Promise.resolve();
@@ -278,7 +279,7 @@ function bindSeg(el, sel, cb, initial, attr = 'v') {
 }
 
 async function renderToday(el, exercises) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const workouts = await getAll('workouts');
   const workout = workouts.find((w) => w.date === today);
   const box = el.querySelector('#w-today');
