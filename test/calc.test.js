@@ -33,3 +33,19 @@ test('computePRs returns max estimated1RM per exercise', () => {
   assert.ok(Math.abs(prs.a - estimate1RM(110, 3)) < 0.01);
   assert.ok(Math.abs(prs.b - estimate1RM(60, 10)) < 0.01);
 });
+
+test('computePRs subtracts assistedReps for self reps', () => {
+  const sets = [
+    { exerciseId: 'a', weight: 100, reps: 8, assistedReps: 2 },
+  ];
+  const prs = computePRs(sets);
+  assert.ok(Math.abs(prs.a - estimate1RM(100, 6)) < 1e-9);
+});
+
+test('computePRs treats missing assistedReps as 0', () => {
+  const sets = [
+    { exerciseId: 'b', weight: 60, reps: 10 },
+  ];
+  const prs = computePRs(sets);
+  assert.ok(Math.abs(prs.b - estimate1RM(60, 10)) < 1e-9);
+});

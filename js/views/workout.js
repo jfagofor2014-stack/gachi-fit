@@ -66,6 +66,12 @@ export async function renderWorkout(el) {
       <div class="field"><label>重量(kg)</label><div id="w-weight"></div></div>
       <div class="field"><label>回数</label><div id="w-reps"></div></div>
       <div class="muted">推定1RM: <span id="w-1rm" class="pr-badge">-</span></div>
+      <div class="field" style="margin-top:12px">
+        <button type="button" id="w-assist-toggle" class="btn btn-block">補助あり：OFF</button>
+        <div id="w-assist-wrap" style="display:none;margin-top:8px">
+          <label>補助回数</label><div id="w-assist"></div>
+        </div>
+      </div>
       <div class="field" style="margin-top:12px"><label>腹圧保持 (1-5)</label>
         <div class="seg" id="w-core">${seg(5)}</div></div>
       <div class="field"><label>対象筋への負荷 (1-5)</label>
@@ -124,6 +130,15 @@ export async function renderWorkout(el) {
 
   const weightStepper = createStepper(el.querySelector('#w-weight'), { value: 0, step: 2.5, min: 0, onChange: refresh1RM });
   const repsStepper = createStepper(el.querySelector('#w-reps'), { value: 0, step: 1, min: 0, onChange: refresh1RM });
+  const assistStepper = createStepper(el.querySelector('#w-assist'), { value: 0, step: 1, min: 0, onChange: refresh1RM });
+  let assistOn = false;
+  el.querySelector('#w-assist-toggle').addEventListener('click', () => {
+    assistOn = !assistOn;
+    el.querySelector('#w-assist-toggle').textContent = '補助あり：' + (assistOn ? 'ON' : 'OFF');
+    el.querySelector('#w-assist-wrap').style.display = assistOn ? 'block' : 'none';
+    if (!assistOn) assistStepper.set(0);
+    refresh1RM();
+  });
 
   function refreshPR() {
     const exId = el.querySelector('#w-ex').value;
@@ -139,8 +154,10 @@ export async function renderWorkout(el) {
   function refresh1RM() {
     const w = weightStepper.get();
     const r = repsStepper.get();
+    const a = assistOn ? assistStepper.get() : 0;
+    const selfReps = r - a;
     el.querySelector('#w-1rm').textContent =
-      w > 0 && r > 0 ? estimate1RM(w, r).toFixed(1) + 'kg' : '-';
+      w > 0 && selfReps > 0 ? estimate1RM(w, selfReps).toFixed(1) + 'kg' : '-';
   }
 
   el.querySelector('#w-ex').addEventListener('change', refreshPR);
@@ -215,14 +232,16 @@ export async function renderWorkout(el) {
     const err = el.querySelector('#w-error');
     const weight = weightStepper.get();
     const reps = repsStepper.get();
+    const assistedReps = assistOn ? assistStepper.get() : 0;
     if (!(weight > 0) || !(reps > 0)) { err.textContent = '重量と回数を正しく入力してください'; return; }
+    if (assistedReps > reps) { err.textContent = '補助回数は回数以下にしてください'; return; }
     if (state.core === null || state.load === null) { err.textContent = '腹圧と対象筋負荷を選択してください'; return; }
     err.textContent = '';
     const exerciseId = el.querySelector('#w-ex').value;
     const workout = await patchTodayWorkout();
-    const est = estimate1RM(weight, reps);
+    const est = estimate1RM(weight, reps - assistedReps);
     const setId = uid();
-    await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight, reps,
+    await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight, reps, assistedReps,
       estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: Date.now() });
     const score = sensoryScore({ core: state.core, muscleLoad: state.load, rom: state.rom });
     await put('sensoryLogs', { id: uid(), setId, core: state.core, muscleLoad: state.load,
@@ -231,6 +250,10 @@ export async function renderWorkout(el) {
     state.note = '';
     el.querySelectorAll('#w-tags .chip-tag').forEach((b) => b.classList.remove('sel'));
     el.querySelector('#w-note').value = '';
+    assistOn = false;
+    assistStepper.set(0);
+    el.querySelector('#w-assist-toggle').textContent = '補助あり：OFF';
+    el.querySelector('#w-assist-wrap').style.display = 'none';
     await renderToday(el, exercises);
   });
 
@@ -267,7 +290,7 @@ async function renderToday(el, exercises) {
   box.innerHTML = sets.map((s) => {
     const log = logs.find((l) => l.setId === s.id);
     return `<div class="list-item">
-      <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}<br>
+      <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}<br>
         <span class="muted" style="font-size:12px">1RM ${s.estimated1RM.toFixed(0)} / Q ${log ? log.score.toFixed(1) : '-'}</span></span>
       <span>
         <button class="btn btn-edit" data-edit="${s.id}" style="min-height:40px;padding:0 12px">編集</button>
