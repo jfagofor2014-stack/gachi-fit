@@ -65,3 +65,9 @@ h2.view-title { font-size: 22px; margin: 4px 0 16px; }
 .photo-thumb { position: relative; }
 .photo-thumb img { width: 100%; border-radius: 12px; display: block; }
 .photo-thumb.sel { outline: 3px solid var(--accent); border-radius: 12px; }
+.stepper { display: flex; align-items: stretch; gap: 8px; }
+.stepper-btn { flex: 0 0 56px; min-height: var(--tap); font-size: 26px; font-weight: 800;
+  border: 1px solid #2c2c2c; border-radius: 12px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.stepper-input { flex: 1; min-width: 0; text-align: center; min-height: var(--tap);
+  background: var(--surface-2); border: 1px solid #2c2c2c; border-radius: 12px; color: var(--text);
+  font-size: 22px; font-weight: 700; }
