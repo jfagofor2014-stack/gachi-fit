@@ -39,7 +39,7 @@ export async function renderHistory(el) {
           const dt = new Date(s.createdAt);
           return `<div class="list-item">
             <span class="muted">${dt.getMonth() + 1}/${dt.getDate()}</span>
-            <span>${s.weight}kg × ${s.reps}</span>
+            <span>${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}</span>
             <span class="muted">1RM ${s.estimated1RM.toFixed(0)} / Q ${log ? log.score.toFixed(1) : '-'}</span>
           </div>`;
         }).join('')}
