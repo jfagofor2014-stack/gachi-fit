@@ -2,6 +2,7 @@ import { getAll, get, put, remove, uid } from '../db.js';
 import { compressImage } from '../lib/image.js';
 import { sparklinePath } from '../lib/chart.js';
 import { escapeHtml } from './exercises.js';
+import { localDateStr } from '../lib/localdate.js';
 
 export async function renderBody(el) {
   const goal = (await get('goals', 'main')) || { targetWeight: '' };
@@ -44,7 +45,7 @@ export async function renderBody(el) {
   el.querySelector('#b-weight-add').addEventListener('click', async () => {
     const w = parseFloat(el.querySelector('#b-weight').value);
     if (!(w > 0)) { el.querySelector('#b-msg').textContent = '体重を正しく入力してください'; return; }
-    await put('bodyWeights', { id: uid(), date: new Date().toISOString().slice(0, 10), weight: w });
+    await put('bodyWeights', { id: uid(), date: localDateStr(), weight: w });
     renderBody(el);
   });
 
@@ -56,7 +57,7 @@ export async function renderBody(el) {
     const msg = el.querySelector('#b-msg');
     try {
       const dataUrl = await compressImage(file);
-      await put('photos', { id: uid(), date: new Date().toISOString().slice(0, 10),
+      await put('photos', { id: uid(), date: localDateStr(),
         bodyPart: el.querySelector('#b-part').value.trim(), dataUrl, note: '' });
       msg.textContent = '写真を保存しました。';
       renderBody(el);

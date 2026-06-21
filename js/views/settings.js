@@ -1,4 +1,5 @@
 import { exportAll, importAll, getAll, put, remove, uid, get } from '../db.js';
+import { localDateStr } from '../lib/localdate.js';
 
 export async function renderSettings(el) {
   const key = localStorage.getItem('gemini_api_key') || '';
@@ -105,7 +106,7 @@ export async function renderSettings(el) {
     const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `gachi-fit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.href = url; a.download = `gachi-fit-${localDateStr()}.json`;
     a.click(); URL.revokeObjectURL(url);
     el.querySelector('#s-msg').textContent = 'エクスポートしました。';
   });
