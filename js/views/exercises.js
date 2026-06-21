@@ -20,7 +20,15 @@ export async function renderExercises(el) {
       <div id="ex-error" class="error"></div>
       <button id="ex-save" class="btn btn-primary btn-block">種目を追加</button>
     </div>
-    <div id="ex-list"></div>`;
+    <div id="ex-list"></div>
+    <div class="card">
+      <strong>場所の登録</strong>
+      <div class="row" style="margin-top:8px">
+        <input id="pl-name" class="input" placeholder="例: 〇〇ジム 渋谷店" />
+        <button id="pl-add" class="btn btn-primary" style="flex:0 0 auto">追加</button>
+      </div>
+      <div id="pl-list"></div>
+    </div>`;
 
   let pattern = patterns[0];
   el.querySelectorAll('#ex-pattern button').forEach((b) =>
@@ -41,6 +49,34 @@ export async function renderExercises(el) {
   });
 
   renderList(el, exercises);
+
+  async function renderPlaces() {
+    const places = await getAll('places');
+    el.querySelector('#pl-list').innerHTML = places.map((p) => `
+      <div class="list-item">
+        <span>${escapeHtml(p.name)}</span>
+        <span>
+          <button class="btn btn-edit" data-pl-edit="${p.id}" style="min-height:40px;padding:0 12px">編集</button>
+          <button class="btn btn-danger" data-pl-del="${p.id}" style="min-height:40px;padding:0 12px">削除</button>
+        </span>
+      </div>`).join('') || '<p class="muted">場所がありません。</p>';
+    el.querySelectorAll('[data-pl-del]').forEach((b) =>
+      b.addEventListener('click', async () => { await remove('places', b.dataset.plDel); renderPlaces(); }));
+    el.querySelectorAll('[data-pl-edit]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const p = (await getAll('places')).find((x) => x.id === b.dataset.plEdit);
+        const name = prompt('場所名を編集', p.name);
+        if (name && name.trim()) { p.name = name.trim(); await put('places', p); renderPlaces(); }
+      }));
+  }
+  el.querySelector('#pl-add').addEventListener('click', async () => {
+    const name = el.querySelector('#pl-name').value.trim();
+    if (!name) return;
+    await put('places', { id: uid(), name });
+    el.querySelector('#pl-name').value = '';
+    renderPlaces();
+  });
+  renderPlaces();
 }
 
 function renderList(el, exercises) {
