@@ -15,6 +15,17 @@ test('buildInsightPrompt includes PR and tag stats', () => {
   assert.match(p, /腹圧抜けた/);
 });
 
+test('buildInsightPrompt includes workout notes', () => {
+  const stats = {
+    prs: [], tagFreq: [], scoreCorr: [], recentCount: 3,
+    workoutNotes: ['今日は調子が良かった', '腰に張りがある'],
+  };
+  const p = buildInsightPrompt(stats);
+  assert.match(p, /今日は調子が良かった/);
+  assert.match(p, /腰に張りがある/);
+  assert.match(p, /感想/);
+});
+
 test('callGemini posts to endpoint and extracts text', async () => {
   let captured;
   const fakeFetch = async (url, opts) => {

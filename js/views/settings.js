@@ -9,6 +9,13 @@ export async function renderSettings(el) {
     <h2 class="view-title">設定</h2>
 
     <div class="card">
+      <strong>既定インターバル秒数</strong>
+      <p class="muted">記録タブのインターバルの初期値。</p>
+      <input id="s-int" type="number" class="input" value="${localStorage.getItem('default_interval_sec') || '90'}" min="1" max="600" />
+      <button id="s-int-save" class="btn btn-primary btn-block" style="margin-top:10px">秒数を保存</button>
+    </div>
+
+    <div class="card">
       <strong>Gemini APIキー</strong>
       <p class="muted">AI分析に使用。キーはこの端末内のみに保存されます。</p>
       <input id="s-key" type="password" class="input" value="${key}" placeholder="AIza..." />
@@ -41,6 +48,16 @@ export async function renderSettings(el) {
       <button id="s-import" class="btn btn-block">インポート</button>
       <div id="s-msg" class="muted" style="margin-top:10px"></div>
     </div>`;
+
+  el.querySelector('#s-int-save').addEventListener('click', () => {
+    const v = parseInt(el.querySelector('#s-int').value, 10);
+    if (v >= 1 && v <= 600) {
+      localStorage.setItem('default_interval_sec', String(v));
+      el.querySelector('#s-msg').textContent = '既定インターバル秒数を保存しました。';
+    } else {
+      el.querySelector('#s-msg').textContent = '1〜600の範囲で入力してください。';
+    }
+  });
 
   el.querySelector('#s-key-save').addEventListener('click', () => {
     localStorage.setItem('gemini_api_key', el.querySelector('#s-key').value.trim());
