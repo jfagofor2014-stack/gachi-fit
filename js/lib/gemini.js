@@ -9,6 +9,7 @@ export function buildInsightPrompt(stats) {
   const corr = (stats.scoreCorr || [])
     .map((c) => `- ${c.tag}: 品質スコアが${c.direction === 'lower' ? '低い' : '高い'}傾向`)
     .join('\n');
+  const notes = (stats.workoutNotes || []).map((n) => `- ${n}`).join('\n');
   return [
     'あなたは中・上級トレーニーを指導するパーソナルトレーナーです。',
     '以下のトレーニング記録の傾向を踏まえ、弱点の克服に向けた具体的な改善提案を3つ、簡潔な日本語で提示してください。',
@@ -18,6 +19,7 @@ export function buildInsightPrompt(stats) {
     '【種目別PR】', prs || '（なし）',
     '【よく使うタグ】', tags || '（なし）',
     '【タグと品質スコアの傾向】', corr || '（なし）',
+    '【最近の感想】', notes || '（なし）',
   ].join('\n');
 }
 
