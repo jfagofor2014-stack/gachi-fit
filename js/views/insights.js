@@ -58,6 +58,8 @@ export async function renderInsights(el) {
       out.textContent = '分析中…';
       try {
         const exercises = await getAll('exercises');
+        const workouts = (await getAll('workouts')).sort((a, b) => (a.date < b.date ? 1 : -1));
+        const workoutNotes = workouts.map((w) => w.note).filter((n) => n && n.trim()).slice(0, 10);
         const prs = computePRs(sets);
         const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
         const stats = {
@@ -65,6 +67,7 @@ export async function renderInsights(el) {
           tagFreq: freq,
           scoreCorr,
           recentCount: recent.length,
+          workoutNotes,
         };
         const prompt = buildInsightPrompt(stats);
         out.textContent = await callGemini(prompt, key, {});
