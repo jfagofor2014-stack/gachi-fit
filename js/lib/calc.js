@@ -22,7 +22,8 @@ export function sensoryScore({ core = 0, muscleLoad = 0, rom = 'full' } = {}) {
 export function computePRs(sets = []) {
   const prs = {};
   for (const s of sets) {
-    const e = estimate1RM(s.weight, s.reps);
+    const selfReps = (Number(s.reps) || 0) - (Number(s.assistedReps) || 0);
+    const e = estimate1RM(s.weight, selfReps);
     if (prs[s.exerciseId] === undefined || e > prs[s.exerciseId]) {
       prs[s.exerciseId] = e;
     }
