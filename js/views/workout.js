@@ -50,11 +50,26 @@ export async function renderWorkout(el) {
   el.innerHTML = `
     <h2 class="view-title">記録</h2>
     <div class="card">
-      <div class="field"><label>場所</label>
+      <strong>本日のトレーニング</strong>
+      <div class="field" style="margin-top:10px"><label>場所</label>
         <select id="w-place" class="input">
           <option value="">未選択</option>
           ${places.map((p) => `<option value="${p.id}" ${todayWorkout && todayWorkout.placeId === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select></div>
+      <div class="field"><label>トレーニング時間</label>
+        <div id="w-dur" class="muted">${todayWorkout && todayWorkout.durationSec ? '記録: ' + formatMinutes(todayWorkout.durationSec) : '未記録'}</div>
+      </div>
+      <div class="row">
+        <button id="w-dur-start" class="btn btn-primary">開始</button>
+        <button id="w-dur-stop" class="btn">終了</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="w-dur-min" type="number" class="input" placeholder="分（手動）" />
+        <button id="w-dur-save" class="btn" style="flex:0 0 auto">手動保存</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="field"><label>種目</label>
         <select id="w-ex" class="input">
           ${exercises.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}${e.bodyPart ? ' / ' + escapeHtml(e.bodyPart) : ''}</option>`).join('')}
@@ -102,19 +117,6 @@ export async function renderWorkout(el) {
       <div class="row" style="margin-top:10px">
         <button id="w-int-start" class="btn btn-primary">開始</button>
         <button id="w-int-stop" class="btn">停止</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <strong>トレーニング時間</strong>
-      <div id="w-dur" class="muted" style="margin-top:8px">${todayWorkout && todayWorkout.durationSec ? '記録: ' + formatMinutes(todayWorkout.durationSec) : '未記録'}</div>
-      <div class="row" style="margin-top:8px">
-        <button id="w-dur-start" class="btn btn-primary">開始</button>
-        <button id="w-dur-stop" class="btn">終了</button>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input id="w-dur-min" type="number" class="input" placeholder="分（手動）" />
-        <button id="w-dur-save" class="btn" style="flex:0 0 auto">手動保存</button>
       </div>
     </div>
 
