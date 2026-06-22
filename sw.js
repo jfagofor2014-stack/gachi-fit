@@ -1,4 +1,4 @@
-const CACHE = 'gachi-fit-v8';
+const CACHE = 'gachi-fit-v9';
 const ASSETS = [
   '.', 'index.html', 'css/style.css',
   'js/app.js', 'js/db.js', 'js/timer.js',
