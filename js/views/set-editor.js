@@ -1,5 +1,5 @@
 import { get, getAll, put, uid } from '../db.js';
-import { estimate1RM, sensoryScore } from '../lib/calc.js';
+import { estimate1RM } from '../lib/calc.js';
 import { escapeHtml } from './exercises.js';
 import { SENSORY_TAGS } from './workout.js';
 import { createStepper } from './components.js';
@@ -8,7 +8,7 @@ import { createStepper } from './components.js';
 export async function openSetEditor(setId, onDone) {
   const set = await get('sets', setId);
   const logs = await getAll('sensoryLogs');
-  const log = logs.find((l) => l.setId === setId) || { core: 3, muscleLoad: 3, rom: 'full', tags: [], note: '' };
+  const log = logs.find((l) => l.setId === setId) || { tags: [], note: '' };
   const tagSet = new Set(log.tags || []);
 
   const modal = document.createElement('div');
@@ -22,14 +22,6 @@ export async function openSetEditor(setId, onDone) {
       <button type="button" id="e-assist-toggle" class="btn btn-block">補助あり：OFF</button>
       <div id="e-assist-wrap" style="display:none;margin-top:8px"><label>補助回数</label><div id="e-assist"></div></div>
     </div>
-    <div class="field"><label>腹圧保持(1-5)</label><input id="e-core" class="input" type="number" min="1" max="5" value="${log.core}" /></div>
-    <div class="field"><label>対象筋への負荷(1-5)</label><input id="e-load" class="input" type="number" min="1" max="5" value="${log.muscleLoad}" /></div>
-    <div class="field"><label>可動域 ROM</label>
-      <div class="seg" id="e-rom">
-        <button data-v="full" class="${log.rom === 'full' ? 'sel' : ''}">フル</button>
-        <button data-v="partial" class="${log.rom === 'partial' ? 'sel' : ''}">部分</button>
-        <button data-v="cheating" class="${log.rom === 'cheating' ? 'sel' : ''}">チーティング</button>
-      </div></div>
     <div class="field"><label>定型タグ</label><div id="e-tags">
       ${SENSORY_TAGS.map((t) => `<button type="button" class="chip chip-tag ${tagSet.has(t) ? 'sel' : ''}" data-tag="${t}">${t}</button>`).join('')}
     </div></div>
@@ -54,12 +46,6 @@ export async function openSetEditor(setId, onDone) {
     syncAssist();
   });
 
-  let rom = log.rom;
-  modal.querySelectorAll('#e-rom button').forEach((bb) =>
-    bb.addEventListener('click', () => {
-      modal.querySelectorAll('#e-rom button').forEach((x) => x.classList.remove('sel'));
-      bb.classList.add('sel'); rom = bb.dataset.v;
-    }));
   modal.querySelectorAll('#e-tags .chip-tag').forEach((bb) =>
     bb.addEventListener('click', () => {
       const t = bb.dataset.tag;
@@ -72,16 +58,13 @@ export async function openSetEditor(setId, onDone) {
     const weight = weightStepper.get();
     const reps = repsStepper.get();
     const assistedReps = assistOn ? assistStepper.get() : 0;
-    const core = parseInt(modal.querySelector('#e-core').value, 10);
-    const load = parseInt(modal.querySelector('#e-load').value, 10);
     const err = modal.querySelector('#e-error');
     if (!(weight > 0) || !(reps > 0)) { err.textContent = '重量と回数を正しく入力してください'; return; }
     if (assistedReps > reps) { err.textContent = '補助回数は回数以下にしてください'; return; }
     set.weight = weight; set.reps = reps; set.assistedReps = assistedReps;
     set.estimated1RM = estimate1RM(weight, reps - assistedReps);
     await put('sets', set);
-    const newLog = { id: log.id || uid(), setId, core, muscleLoad: load, rom,
-      score: sensoryScore({ core, muscleLoad: load, rom }),
+    const newLog = { id: log.id || uid(), setId,
       note: modal.querySelector('#e-note').value, tags: [...tagSet] };
     await put('sensoryLogs', newLog);
     modal.remove();

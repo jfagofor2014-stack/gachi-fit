@@ -1,5 +1,5 @@
 import { getAll } from '../db.js';
-import { tagFrequency, tagScoreCorrelation, tag1RMCorrelation } from '../lib/insights.js';
+import { tagFrequency, tag1RMCorrelation } from '../lib/insights.js';
 import { computePRs } from '../lib/calc.js';
 import { buildInsightPrompt, callGemini } from '../lib/gemini.js';
 import { escapeHtml } from './exercises.js';
@@ -16,19 +16,11 @@ export async function renderInsights(el) {
 
   const recent = logs.slice(-30);
   const freq = tagFrequency(recent);
-  const scoreCorr = tagScoreCorrelation(recent, 1.0);
   const rmCorr = tag1RMCorrelation(logs, sets, 5);
 
   const freqHtml = freq.length
     ? freq.map((f) => `<span class="chip">${escapeHtml(f.tag)} ×${f.count}</span>`).join('')
     : '<p class="muted">タグの記録がありません。</p>';
-
-  const scoreHtml = scoreCorr.length
-    ? scoreCorr.map((c) => `<div class="list-item">
-        <span>${escapeHtml(c.tag)}</span>
-        <span class="muted">品質スコアが全体より${c.direction === 'higher' ? '高い' : '低い'}傾向（平均 ${c.avg.toFixed(1)} / 全体 ${c.overall.toFixed(1)}）</span>
-      </div>`).join('')
-    : '<p class="muted">際立った傾向はまだありません。</p>';
 
   const rmHtml = rmCorr.length
     ? rmCorr.map((c) => `<div class="list-item">
@@ -40,7 +32,6 @@ export async function renderInsights(el) {
   el.innerHTML = `
     <h2 class="view-title">インサイト</h2>
     <div class="card"><strong>よく使うタグ（直近30件）</strong><div style="margin-top:8px">${freqHtml}</div></div>
-    <div class="card"><strong>タグ × 品質スコア</strong>${scoreHtml}</div>
     <div class="card"><strong>タグ × 推定1RM</strong>${rmHtml}</div>
     <div class="card">
       <strong>AIインサイト（Gemini）</strong>
@@ -65,7 +56,6 @@ export async function renderInsights(el) {
         const stats = {
           prs: Object.entries(prs).map(([id, pr]) => ({ name: nameOf(id), pr })),
           tagFreq: freq,
-          scoreCorr,
           recentCount: recent.length,
           workoutNotes,
         };

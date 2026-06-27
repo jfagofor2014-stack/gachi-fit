@@ -1,7 +1,9 @@
 import { getAll, get, put, remove, uid } from '../db.js';
-import { estimate1RM, sensoryScore, computePRs } from '../lib/calc.js';
+import { estimate1RM, computePRs } from '../lib/calc.js';
 import { createTimer, formatTime } from '../timer.js';
 import { formatMinutes } from '../lib/duration.js';
+import { durationMinutes } from '../lib/timerange.js';
+import { categoryVolumeForDate, maxCategoryVolumeExcludingDate } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
 import { escapeHtml } from './exercises.js';
 import { createStepper } from './components.js';
@@ -10,7 +12,6 @@ import { openSetEditor } from './set-editor.js';
 export const SENSORY_TAGS = ['調子良い', '腹圧抜けた', 'フォーム崩れ', '対象筋に効いた', '関節に違和感', '軽く感じた'];
 
 let intervalTimer;
-let durationTicker;
 
 const todayStr = () => localDateStr();
 
@@ -27,7 +28,6 @@ function patchTodayWorkout(patch = {}) {
     await put('workouts', w);
     return w;
   });
-  // 次の処理が前の失敗で止まらないようにチェーンは常にsettledで継続
   patchQueue = run.catch(() => {});
   return run;
 }
@@ -56,17 +56,13 @@ export async function renderWorkout(el) {
           <option value="">未選択</option>
           ${places.map((p) => `<option value="${p.id}" ${todayWorkout && todayWorkout.placeId === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select></div>
-      <div class="field"><label>トレーニング時間</label>
-        <div id="w-dur" class="muted">${todayWorkout && todayWorkout.durationSec ? '記録: ' + formatMinutes(todayWorkout.durationSec) : '未記録'}</div>
-      </div>
       <div class="row">
-        <button id="w-dur-start" class="btn btn-primary">開始</button>
-        <button id="w-dur-stop" class="btn">終了</button>
+        <div class="field"><label>開始</label>
+          <input id="w-start" type="time" class="input" value="${todayWorkout && todayWorkout.startTime ? todayWorkout.startTime : ''}" /></div>
+        <div class="field"><label>終了</label>
+          <input id="w-end" type="time" class="input" value="${todayWorkout && todayWorkout.endTime ? todayWorkout.endTime : ''}" /></div>
       </div>
-      <div class="row" style="margin-top:8px">
-        <input id="w-dur-min" type="number" class="input" placeholder="分（手動）" />
-        <button id="w-dur-save" class="btn" style="flex:0 0 auto">手動保存</button>
-      </div>
+      <div id="w-dur" class="muted">${todayWorkout && todayWorkout.durationSec ? '所要: ' + formatMinutes(todayWorkout.durationSec) : '所要: —'}</div>
     </div>
 
     <div class="card">
@@ -78,6 +74,8 @@ export async function renderWorkout(el) {
       <div id="w-cues"></div>
     </div>
 
+    <div class="card" id="w-volume"></div>
+
     <div class="card">
       <div class="field"><label>重量(kg)</label><div id="w-weight"></div></div>
       <div class="field"><label>回数</label><div id="w-reps"></div></div>
@@ -88,17 +86,7 @@ export async function renderWorkout(el) {
           <label>補助回数</label><div id="w-assist"></div>
         </div>
       </div>
-      <div class="field" style="margin-top:12px"><label>腹圧保持 (1-5)</label>
-        <div class="seg" id="w-core">${seg(5)}</div></div>
-      <div class="field"><label>対象筋への負荷 (1-5)</label>
-        <div class="seg" id="w-load">${seg(5)}</div></div>
-      <div class="field"><label>可動域 ROM</label>
-        <div class="seg" id="w-rom">
-          <button data-v="full" class="sel">フル</button>
-          <button data-v="partial">部分</button>
-          <button data-v="cheating">チーティング</button>
-        </div></div>
-      <div class="field"><label>定型タグ（複数可）</label>
+      <div class="field" style="margin-top:12px"><label>定型タグ（複数可）</label>
         <div id="w-tags">
           ${SENSORY_TAGS.map((t) => `<button type="button" class="chip chip-tag" data-tag="${t}">${t}</button>`).join('')}
         </div></div>
@@ -129,7 +117,7 @@ export async function renderWorkout(el) {
 
     <div class="card"><strong>本日のセット</strong><div id="w-today"></div></div>`;
 
-  const state = { core: null, load: null, rom: 'full', tags: new Set(), note: '', interval: defaultSec };
+  const state = { tags: new Set(), note: '', interval: defaultSec };
 
   const weightStepper = createStepper(el.querySelector('#w-weight'), { value: 0, step: 2.5, min: 0, onChange: refresh1RM });
   const repsStepper = createStepper(el.querySelector('#w-reps'), { value: 0, step: 1, min: 0, onChange: refresh1RM });
@@ -163,10 +151,27 @@ export async function renderWorkout(el) {
       w > 0 && selfReps > 0 ? estimate1RM(w, selfReps).toFixed(1) + 'kg' : '-';
   }
 
-  el.querySelector('#w-ex').addEventListener('change', refreshPR);
-  bindSeg(el, '#w-core', (v) => (state.core = v));
-  bindSeg(el, '#w-load', (v) => (state.load = v));
-  bindSeg(el, '#w-rom', (v) => (state.rom = v), 'full');
+  async function refreshVolumeBar() {
+    const box = el.querySelector('#w-volume');
+    const exId = el.querySelector('#w-ex').value;
+    const ex = exercises.find((e) => e.id === exId);
+    const cat = (ex && ex.category) || 'その他';
+    const sets = await getAll('sets');
+    const workouts = await getAll('workouts');
+    const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+    const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
+    const today = localDateStr();
+    const todayVol = categoryVolumeForDate(sets, exById, wkById, today)[cat] || 0;
+    const pastMax = maxCategoryVolumeExcludingDate(sets, exById, wkById, today)[cat] || 0;
+    const pct = pastMax > 0 ? Math.min(100, (todayVol / pastMax) * 100) : (todayVol > 0 ? 100 : 0);
+    const beat = todayVol > pastMax && todayVol > 0;
+    box.innerHTML = `
+      <div class="muted">部位「${escapeHtml(cat)}」の本日ボリューム</div>
+      <div class="volbar"><div class="volbar-fill" style="width:${pct}%"></div></div>
+      <div class="muted">本日 ${Math.round(todayVol)} / 過去最高 ${pastMax > 0 ? Math.round(pastMax) : '—'}${beat ? ' <span class="pr-badge">自己ベスト更新！</span>' : ''}</div>`;
+  }
+
+  el.querySelector('#w-ex').addEventListener('change', () => { refreshPR(); refreshVolumeBar(); });
   el.querySelectorAll('#w-tags .chip-tag').forEach((b) =>
     b.addEventListener('click', () => {
       const t = b.dataset.tag;
@@ -179,6 +184,17 @@ export async function renderWorkout(el) {
   el.querySelector('#w-place').addEventListener('change', async (e) => {
     await patchTodayWorkout({ placeId: e.target.value || null });
   });
+
+  // トレーニング時間（開始〜終了の手入力）
+  async function saveTimeRange() {
+    const start = el.querySelector('#w-start').value;
+    const end = el.querySelector('#w-end').value;
+    const mins = durationMinutes(start, end);
+    await patchTodayWorkout({ startTime: start, endTime: end, durationSec: mins * 60 });
+    el.querySelector('#w-dur').textContent = '所要: ' + (mins > 0 ? formatMinutes(mins * 60) : '—');
+  }
+  el.querySelector('#w-start').addEventListener('change', saveTimeRange);
+  el.querySelector('#w-end').addEventListener('change', saveTimeRange);
 
   // インターバル（独立）
   bindSeg(el, '#w-int-secs', (v) => (state.interval = Number(v)), defaultSec, 's');
@@ -195,34 +211,6 @@ export async function renderWorkout(el) {
     el.querySelector('#w-timer').style.display = 'none';
   });
 
-  // トレーニング時間
-  function stopDurationTicker() { if (durationTicker) { clearInterval(durationTicker); durationTicker = null; } }
-  el.querySelector('#w-dur-start').addEventListener('click', async () => {
-    const w = await patchTodayWorkout({ startedAt: Date.now() });
-    stopDurationTicker();
-    const durEl = el.querySelector('#w-dur');
-    durationTicker = setInterval(() => {
-      durEl.textContent = '計測中: ' + formatTime(Math.floor((Date.now() - w.startedAt) / 1000));
-    }, 1000);
-  });
-  el.querySelector('#w-dur-stop').addEventListener('click', async () => {
-    stopDurationTicker();
-    const today = todayStr();
-    const w = (await getAll('workouts')).find((x) => x.date === today);
-    if (w && w.startedAt) {
-      const sec = Math.floor((Date.now() - w.startedAt) / 1000);
-      await patchTodayWorkout({ durationSec: sec });
-      el.querySelector('#w-dur').textContent = '記録: ' + formatMinutes(sec);
-    }
-  });
-  el.querySelector('#w-dur-save').addEventListener('click', async () => {
-    const min = parseFloat(el.querySelector('#w-dur-min').value);
-    if (!(min >= 0)) return;
-    const sec = Math.round(min * 60);
-    await patchTodayWorkout({ durationSec: sec });
-    el.querySelector('#w-dur').textContent = '記録: ' + formatMinutes(sec);
-  });
-
   // 感想
   el.querySelector('#w-impression-save').addEventListener('click', async () => {
     await patchTodayWorkout({ note: el.querySelector('#w-impression').value });
@@ -230,7 +218,7 @@ export async function renderWorkout(el) {
     setTimeout(() => { el.querySelector('#w-impression-save').textContent = '感想を保存'; }, 1500);
   });
 
-  // セット記録（保存のみ・タイマー起動しない）
+  // セット記録（保存のみ）
   el.querySelector('#w-save').addEventListener('click', async () => {
     const err = el.querySelector('#w-error');
     const weight = weightStepper.get();
@@ -238,7 +226,6 @@ export async function renderWorkout(el) {
     const assistedReps = assistOn ? assistStepper.get() : 0;
     if (!(weight > 0) || !(reps > 0)) { err.textContent = '重量と回数を正しく入力してください'; return; }
     if (assistedReps > reps) { err.textContent = '補助回数は回数以下にしてください'; return; }
-    if (state.core === null || state.load === null) { err.textContent = '腹圧と対象筋負荷を選択してください'; return; }
     err.textContent = '';
     const exerciseId = el.querySelector('#w-ex').value;
     const workout = await patchTodayWorkout();
@@ -246,9 +233,7 @@ export async function renderWorkout(el) {
     const setId = uid();
     await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight, reps, assistedReps,
       estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: Date.now() });
-    const score = sensoryScore({ core: state.core, muscleLoad: state.load, rom: state.rom });
-    await put('sensoryLogs', { id: uid(), setId, core: state.core, muscleLoad: state.load,
-      rom: state.rom, score, note: state.note, tags: [...state.tags] });
+    await put('sensoryLogs', { id: uid(), setId, note: state.note, tags: [...state.tags] });
     state.tags.clear();
     state.note = '';
     el.querySelectorAll('#w-tags .chip-tag').forEach((b) => b.classList.remove('sel'));
@@ -257,15 +242,16 @@ export async function renderWorkout(el) {
     assistStepper.set(0);
     el.querySelector('#w-assist-toggle').textContent = '補助あり：OFF';
     el.querySelector('#w-assist-wrap').style.display = 'none';
+    const saveBtn = el.querySelector('#w-save');
+    saveBtn.textContent = '保存しました';
+    setTimeout(() => { saveBtn.textContent = 'セット記録'; }, 1500);
     await renderToday(el, exercises);
+    await refreshVolumeBar();
   });
 
   refreshPR();
+  await refreshVolumeBar();
   await renderToday(el, exercises);
-}
-
-function seg(n) {
-  return Array.from({ length: n }, (_, i) => `<button data-v="${i + 1}">${i + 1}</button>`).join('');
 }
 
 function bindSeg(el, sel, cb, initial, attr = 'v') {
@@ -288,19 +274,15 @@ async function renderToday(el, exercises) {
   if (!workout) { box.innerHTML = '<p class="muted">まだ記録なし</p>'; return; }
   const sets = (await getAll('sets')).filter((s) => s.workoutId === workout.id)
     .sort((a, b) => b.createdAt - a.createdAt);
-  const logs = await getAll('sensoryLogs');
   const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
-  box.innerHTML = sets.map((s) => {
-    const log = logs.find((l) => l.setId === s.id);
-    return `<div class="list-item">
+  box.innerHTML = sets.map((s) => `<div class="list-item">
       <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}<br>
-        <span class="muted" style="font-size:12px">1RM ${s.estimated1RM.toFixed(0)} / Q ${log ? log.score.toFixed(1) : '-'}</span></span>
+        <span class="muted" style="font-size:12px">1RM ${s.estimated1RM.toFixed(0)}</span></span>
       <span>
         <button class="btn btn-edit" data-edit="${s.id}" style="min-height:40px;padding:0 12px">編集</button>
         <button class="btn btn-danger" data-del="${s.id}" style="min-height:40px;padding:0 12px">削除</button>
       </span>
-    </div>`;
-  }).join('') || '<p class="muted">まだ記録なし</p>';
+    </div>`).join('') || '<p class="muted">まだ記録なし</p>';
 
   box.querySelectorAll('[data-edit]').forEach((b) =>
     b.addEventListener('click', () => openSetEditor(b.dataset.edit, () => renderToday(el, exercises))));

@@ -6,7 +6,6 @@ import { escapeHtml } from './exercises.js';
 export async function renderHistory(el) {
   const exercises = await getAll('exercises');
   const sets = (await getAll('sets')).sort((a, b) => b.createdAt - a.createdAt);
-  const logs = await getAll('sensoryLogs');
   const prs = computePRs(sets);
   const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
 
@@ -35,12 +34,11 @@ export async function renderHistory(el) {
         </div>
         ${chart}
         ${list.slice(0, 8).map((s) => {
-          const log = logs.find((l) => l.setId === s.id);
           const dt = new Date(s.createdAt);
           return `<div class="list-item">
             <span class="muted">${dt.getMonth() + 1}/${dt.getDate()}</span>
             <span>${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}</span>
-            <span class="muted">1RM ${s.estimated1RM.toFixed(0)} / Q ${log ? log.score.toFixed(1) : '-'}</span>
+            <span class="muted">1RM ${s.estimated1RM.toFixed(0)}</span>
           </div>`;
         }).join('')}
       </div>`;
