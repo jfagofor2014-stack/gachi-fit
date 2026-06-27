@@ -86,3 +86,7 @@ h2.view-title { font-size: 22px; margin: 4px 0 16px; }
 .cal-sel { outline: 2px solid var(--text); }
 .volbar { background: var(--surface-2); border-radius: 999px; height: 12px; overflow: hidden; margin: 4px 0; }
 .volbar-fill { background: var(--accent); height: 100%; border-radius: 999px; }
+.vol-row { border-bottom: 1px solid #1f1f1f; }
+.vol-row .list-item { cursor: pointer; }
+.vol-breakdown { padding: 4px 0 8px; }
+details > summary { cursor: pointer; list-style: revert; }

@@ -3,7 +3,7 @@ import { estimate1RM, computePRs } from '../lib/calc.js';
 import { createTimer, formatTime } from '../timer.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
-import { categoryVolumeForDate, maxCategoryVolumeExcludingDate } from '../lib/volume.js';
+import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
 import { escapeHtml } from './exercises.js';
 import { createStepper } from './components.js';
@@ -155,14 +155,14 @@ export async function renderWorkout(el) {
     const box = el.querySelector('#w-volume');
     const exId = el.querySelector('#w-ex').value;
     const ex = exercises.find((e) => e.id === exId);
-    const cat = (ex && ex.category) || 'その他';
+    const cat = categoryKey(ex);
     const sets = await getAll('sets');
     const workouts = await getAll('workouts');
     const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
     const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
     const today = localDateStr();
     const todayVol = categoryVolumeForDate(sets, exById, wkById, today)[cat] || 0;
-    const pastMax = maxCategoryVolumeExcludingDate(sets, exById, wkById, today)[cat] || 0;
+    const pastMax = maxCategoryVolumeExcludingDate(sets, exById, wkById, today, VOLUME_START_DATE)[cat] || 0;
     const pct = pastMax > 0 ? Math.min(100, (todayVol / pastMax) * 100) : (todayVol > 0 ? 100 : 0);
     const beat = todayVol > pastMax && todayVol > 0;
     box.innerHTML = `
