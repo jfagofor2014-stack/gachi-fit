@@ -1,5 +1,7 @@
 import { getAll, put, remove, uid } from '../db.js';
 
+export const BODY_PARTS = ['背中', '胸', '肩', '脚', '腕', 'その他'];
+
 export async function renderExercises(el) {
   const exercises = await getAll('exercises');
   let patterns = (await getAll('setPatterns')).map((p) => p.name);
@@ -11,6 +13,10 @@ export async function renderExercises(el) {
         <input id="ex-name" class="input" placeholder="例: ベンチプレス" /></div>
       <div class="field"><label>部位（細分化可）</label>
         <input id="ex-part" class="input" placeholder="例: 胸 / 上部" /></div>
+      <div class="field"><label>主要部位</label>
+        <select id="ex-cat" class="input">
+          ${BODY_PARTS.map((p) => `<option value="${p}">${p}</option>`).join('')}
+        </select></div>
       <div class="field"><label>意識ポイント（カンマ区切り）</label>
         <input id="ex-cues" class="input" placeholder="例: 肩甲骨下制, 腹圧" /></div>
       <div class="field"><label>セットパターン</label>
@@ -44,7 +50,8 @@ export async function renderExercises(el) {
     const cuePresets = el.querySelector('#ex-cues').value
       .split(',').map((s) => s.trim()).filter(Boolean);
     if (!name) { el.querySelector('#ex-error').textContent = '種目名を入力してください'; return; }
-    await put('exercises', { id: uid(), name, bodyPart, cuePresets, setPattern: pattern });
+    const category = el.querySelector('#ex-cat').value;
+    await put('exercises', { id: uid(), name, bodyPart, cuePresets, setPattern: pattern, category });
     renderExercises(el);
   });
 
@@ -92,6 +99,7 @@ function renderList(el, exercises) {
           <strong>${escapeHtml(e.name)}</strong>
           <span class="muted"> ${escapeHtml(e.bodyPart || '')}</span>
           <div>${(e.cuePresets || []).map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>
+          ${e.category ? `<span class="chip">${escapeHtml(e.category)}</span>` : ''}
           <span class="chip">${escapeHtml(e.setPattern || '通常')}</span>
         </div>
         <button class="btn btn-danger" data-del="${e.id}">削除</button>
