@@ -128,7 +128,9 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
   box.querySelector('#day-obsidian').addEventListener('click', () => {
     const vault = (localStorage.getItem('obsidian_vault') || '').trim();
     if (!vault) { box.querySelector('#day-export-msg').textContent = '設定でvault名を登録してください。'; return; }
-    location.href = buildObsidianUri(vault, fileName, workoutToMarkdown(data));
+    const folder = (localStorage.getItem('obsidian_folder') || '').trim().replace(/^\/+|\/+$/g, '');
+    const obsidianFile = folder ? `${folder}/${fileName}` : fileName;
+    location.href = buildObsidianUri(vault, obsidianFile, workoutToMarkdown(data));
   });
   box.querySelector('#day-md').addEventListener('click', () => {
     downloadText(workoutToMarkdown(data), fileName);
