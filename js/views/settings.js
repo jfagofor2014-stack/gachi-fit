@@ -24,6 +24,13 @@ export async function renderSettings(el) {
     </div>
 
     <div class="card">
+      <strong>Obsidian vault名</strong>
+      <p class="muted">「Obsidianに送る」で使用します。</p>
+      <input id="s-vault" type="text" class="input" value="${(localStorage.getItem('obsidian_vault') || '').replace(/"/g, '&quot;')}" placeholder="例: MyVault" />
+      <button id="s-vault-save" class="btn btn-primary btn-block" style="margin-top:10px">vault名を保存</button>
+    </div>
+
+    <div class="card">
       <strong>大会・目標</strong>
       <div class="field" style="margin-top:8px"><label>大会日</label>
         <input id="s-comp" type="date" class="input" value="${goal.competitionDate || ''}" /></div>
@@ -63,6 +70,11 @@ export async function renderSettings(el) {
   el.querySelector('#s-key-save').addEventListener('click', () => {
     localStorage.setItem('gemini_api_key', el.querySelector('#s-key').value.trim());
     el.querySelector('#s-msg').textContent = 'APIキーを保存しました。';
+  });
+
+  el.querySelector('#s-vault-save').addEventListener('click', () => {
+    localStorage.setItem('obsidian_vault', el.querySelector('#s-vault').value.trim());
+    el.querySelector('#s-msg').textContent = 'Obsidian vault名を保存しました。';
   });
 
   el.querySelector('#s-goal-save').addEventListener('click', async () => {
