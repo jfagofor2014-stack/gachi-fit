@@ -27,6 +27,8 @@ export async function renderSettings(el) {
       <strong>Obsidian vault名</strong>
       <p class="muted">「Obsidianに送る」で使用します。</p>
       <input id="s-vault" type="text" class="input" value="${(localStorage.getItem('obsidian_vault') || '').replace(/"/g, '&quot;')}" placeholder="例: MyVault" />
+      <div class="field" style="margin-top:8px"><label>フォルダ（任意）</label>
+        <input id="s-folder" type="text" class="input" value="${(localStorage.getItem('obsidian_folder') || '').replace(/"/g, '&quot;')}" placeholder="例: Training/GACHI-FIT" /></div>
       <button id="s-vault-save" class="btn btn-primary btn-block" style="margin-top:10px">vault名を保存</button>
     </div>
 
@@ -74,7 +76,8 @@ export async function renderSettings(el) {
 
   el.querySelector('#s-vault-save').addEventListener('click', () => {
     localStorage.setItem('obsidian_vault', el.querySelector('#s-vault').value.trim());
-    el.querySelector('#s-msg').textContent = 'Obsidian vault名を保存しました。';
+    localStorage.setItem('obsidian_folder', el.querySelector('#s-folder').value.trim().replace(/^\/+|\/+$/g, ''));
+    el.querySelector('#s-msg').textContent = 'Obsidian設定を保存しました。';
   });
 
   el.querySelector('#s-goal-save').addEventListener('click', async () => {
