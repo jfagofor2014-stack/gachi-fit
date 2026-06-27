@@ -1,3 +1,5 @@
+export const VOLUME_START_DATE = '2026-06-28';
+
 // 1セットのボリューム。補助回数は重量を半減ずつ計上：係数 1 - 0.5^assistedReps
 export function setVolume(weight, reps, assistedReps = 0) {
   const w = Number(weight) || 0;
@@ -8,7 +10,12 @@ export function setVolume(weight, reps, assistedReps = 0) {
   return w * (selfReps + assistFactor);
 }
 
-function catOf(ex) {
+// 部位キー：bodyPart の「/」より前。空なら category、無ければ その他
+export function categoryKey(ex) {
+  if (ex && ex.bodyPart) {
+    const head = ex.bodyPart.split('/')[0].trim();
+    if (head) return head;
+  }
   return (ex && ex.category) || 'その他';
 }
 
@@ -18,19 +25,20 @@ export function categoryVolumeForDate(sets, exById, wkById, date) {
   for (const s of sets) {
     const wk = wkById[s.workoutId];
     if (!wk || wk.date !== date) continue;
-    const cat = catOf(exById[s.exerciseId]);
+    const cat = categoryKey(exById[s.exerciseId]);
     out[cat] = (out[cat] || 0) + setVolume(s.weight, s.reps, s.assistedReps);
   }
   return out;
 }
 
-// excludeDate の日を除いた、部位別「日合計」の最大
-export function maxCategoryVolumeExcludingDate(sets, exById, wkById, excludeDate) {
+// excludeDate の日を除き、sinceDate 以前も除いた、部位別「日合計」の最大
+export function maxCategoryVolumeExcludingDate(sets, exById, wkById, excludeDate, sinceDate) {
   const perDate = {};
   for (const s of sets) {
     const wk = wkById[s.workoutId];
     if (!wk || wk.date === excludeDate) continue;
-    const cat = catOf(exById[s.exerciseId]);
+    if (sinceDate && wk.date < sinceDate) continue;
+    const cat = categoryKey(exById[s.exerciseId]);
     (perDate[wk.date] ||= {});
     perDate[wk.date][cat] = (perDate[wk.date][cat] || 0) + setVolume(s.weight, s.reps, s.assistedReps);
   }
@@ -41,4 +49,25 @@ export function maxCategoryVolumeExcludingDate(sets, exById, wkById, excludeDate
     }
   }
   return max;
+}
+
+// 部位別に「日合計が最大の日」とその合計を返す（sinceDate 以降のみ）
+export function maxCategoryVolumeWithDate(sets, exById, wkById, sinceDate) {
+  const perDate = {};
+  for (const s of sets) {
+    const wk = wkById[s.workoutId];
+    if (!wk) continue;
+    if (sinceDate && wk.date < sinceDate) continue;
+    const cat = categoryKey(exById[s.exerciseId]);
+    (perDate[wk.date] ||= {});
+    perDate[wk.date][cat] = (perDate[wk.date][cat] || 0) + setVolume(s.weight, s.reps, s.assistedReps);
+  }
+  const out = {};
+  for (const date in perDate) {
+    for (const cat in perDate[date]) {
+      const v = perDate[date][cat];
+      if (!out[cat] || v > out[cat].volume) out[cat] = { volume: v, date };
+    }
+  }
+  return out;
 }
