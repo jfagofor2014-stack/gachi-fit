@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tagFrequency, tagScoreCorrelation, tag1RMCorrelation } from '../js/lib/insights.js';
+import { tagFrequency, tag1RMCorrelation } from '../js/lib/insights.js';
 
 test('tagFrequency counts tags descending', () => {
   const logs = [
@@ -12,30 +12,6 @@ test('tagFrequency counts tags descending', () => {
     { tag: '腹圧抜けた', count: 2 },
     { tag: '調子良い', count: 1 },
   ]);
-});
-
-test('tagScoreCorrelation flags tags whose avg score deviates beyond threshold', () => {
-  const logs = [
-    { tags: ['腹圧抜けた'], score: 4 },
-    { tags: ['腹圧抜けた'], score: 4 },
-    { tags: ['調子良い'], score: 9 },
-    { tags: ['調子良い'], score: 9 },
-  ];
-  const res = tagScoreCorrelation(logs, 1.0);
-  const low = res.find((r) => r.tag === '腹圧抜けた');
-  const high = res.find((r) => r.tag === '調子良い');
-  assert.equal(low.direction, 'lower');
-  assert.equal(high.direction, 'higher');
-});
-
-test('tagScoreCorrelation ignores tags within threshold', () => {
-  const logs = [
-    { tags: ['普通'], score: 6 },
-    { tags: ['普通'], score: 7 },
-    { tags: ['他'], score: 6.5 },
-  ];
-  const res = tagScoreCorrelation(logs, 1.0);
-  assert.equal(res.find((r) => r.tag === '普通'), undefined);
 });
 
 test('tag1RMCorrelation compares avg estimated1RM per tag', () => {

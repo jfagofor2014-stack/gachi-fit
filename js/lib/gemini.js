@@ -6,9 +6,6 @@ const ENDPOINT = (key) =>
 export function buildInsightPrompt(stats) {
   const prs = (stats.prs || []).map((p) => `- ${p.name}: 推定1RM ${p.pr.toFixed(1)}kg`).join('\n');
   const tags = (stats.tagFreq || []).map((t) => `- ${t.tag}（${t.count}回）`).join('\n');
-  const corr = (stats.scoreCorr || [])
-    .map((c) => `- ${c.tag}: 品質スコアが${c.direction === 'lower' ? '低い' : '高い'}傾向`)
-    .join('\n');
   const notes = (stats.workoutNotes || []).map((n) => `- ${n}`).join('\n');
   return [
     'あなたは中・上級トレーニーを指導するパーソナルトレーナーです。',
@@ -18,7 +15,6 @@ export function buildInsightPrompt(stats) {
     `直近の記録セット数: ${stats.recentCount || 0}`,
     '【種目別PR】', prs || '（なし）',
     '【よく使うタグ】', tags || '（なし）',
-    '【タグと品質スコアの傾向】', corr || '（なし）',
     '【最近の感想】', notes || '（なし）',
   ].join('\n');
 }
