@@ -5,7 +5,8 @@ import { formatMinutes } from '../lib/duration.js';
 import { escapeHtml } from './exercises.js';
 import { renderCalendar } from './calendar.js';
 import { localDateStr } from '../lib/localdate.js';
-import { maxCategoryVolumeExcludingDate } from '../lib/volume.js';
+import { maxCategoryVolumeExcludingDate, categoryVolumeForDate } from '../lib/volume.js';
+import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
 
 export async function renderHome(el) {
   const exercises = await getAll('exercises');
@@ -80,6 +81,7 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
   if (!workout) { box.innerHTML = `<p class="muted">${date}：この日の記録はありません</p>`; return; }
   const sets = (await getAll('sets')).filter((s) => s.workoutId === workout.id)
     .sort((a, b) => a.createdAt - b.createdAt);
+  const logs = await getAll('sensoryLogs');
   let placeName = '';
   if (workout.placeId) {
     const place = (await getAll('places')).find((p) => p.id === workout.placeId);
@@ -98,5 +100,51 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
   box.innerHTML = `<strong>${date}</strong>
     ${meta ? `<div class="muted" style="margin:4px 0">${meta}</div>` : ''}
     ${rows}
-    ${workout.note ? `<div class="muted" style="margin-top:8px">感想: ${escapeHtml(workout.note)}</div>` : ''}`;
+    ${workout.note ? `<div class="muted" style="margin-top:8px">感想: ${escapeHtml(workout.note)}</div>` : ''}
+    <div class="row" style="margin-top:10px">
+      <button id="day-obsidian" class="btn btn-primary">Obsidianに送る</button>
+      <button id="day-md" class="btn">Markdown DL</button>
+    </div>
+    <div id="day-export-msg" class="muted" style="margin-top:6px"></div>`;
+
+  const data = buildDayData(date, workout, sets, exercises, placeName, logs);
+  const fileName = `gachi-fit-${date}.md`;
+  box.querySelector('#day-obsidian').addEventListener('click', () => {
+    const vault = (localStorage.getItem('obsidian_vault') || '').trim();
+    if (!vault) { box.querySelector('#day-export-msg').textContent = '設定でvault名を登録してください。'; return; }
+    location.href = buildObsidianUri(vault, fileName, workoutToMarkdown(data));
+  });
+  box.querySelector('#day-md').addEventListener('click', () => {
+    downloadText(workoutToMarkdown(data), fileName);
+  });
+}
+
+function buildDayData(date, workout, sets, exercises, placeName, logs) {
+  const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const wkById = { [workout.id]: workout };
+  const volRaw = categoryVolumeForDate(sets, exById, wkById, date);
+  const volume = {};
+  for (const [c, v] of Object.entries(volRaw)) volume[c] = Math.round(v);
+
+  const order = [];
+  const grouped = {};
+  for (const s of sets) {
+    if (!grouped[s.exerciseId]) { grouped[s.exerciseId] = []; order.push(s.exerciseId); }
+    const log = logs.find((l) => l.setId === s.id) || {};
+    grouped[s.exerciseId].push({
+      weight: s.weight, reps: s.reps, assistedReps: s.assistedReps || 0,
+      estimated1RM: s.estimated1RM, tags: log.tags || [], note: log.note || '',
+    });
+  }
+  const exercisesData = order.map((id) => ({
+    name: exById[id]?.name || '?', category: exById[id]?.category || '', sets: grouped[id],
+  }));
+  return {
+    date,
+    place: placeName || '',
+    durationMin: workout.durationSec ? Math.round(workout.durationSec / 60) : 0,
+    note: workout.note || '',
+    volume,
+    exercises: exercisesData,
+  };
 }
