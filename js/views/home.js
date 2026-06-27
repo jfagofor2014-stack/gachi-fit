@@ -5,7 +5,7 @@ import { formatMinutes } from '../lib/duration.js';
 import { escapeHtml } from './exercises.js';
 import { renderCalendar } from './calendar.js';
 import { localDateStr } from '../lib/localdate.js';
-import { maxCategoryVolumeExcludingDate, categoryVolumeForDate } from '../lib/volume.js';
+import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
 
 export async function renderHome(el) {
@@ -14,8 +14,6 @@ export async function renderHome(el) {
   const prs = computePRs(sets);
   const today = localDateStr();
   const workouts = await getAll('workouts');
-  const todayWorkout = workouts.find((w) => w.date === today);
-  const todayCount = todayWorkout ? sets.filter((s) => s.workoutId === todayWorkout.id).length : 0;
   const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
 
   const prRows = Object.entries(prs)
@@ -31,14 +29,16 @@ export async function renderHome(el) {
 
   const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
-  const maxVol = maxCategoryVolumeExcludingDate(sets, exById, wkById, null);
-  const maxVolEntries = Object.entries(maxVol).sort((a, b) => b[1] - a[1]);
-  const topVol = maxVolEntries.length ? maxVolEntries[0][1] : 0;
-  const volRows = maxVolEntries.map(([cat, v]) => {
-    const pct = topVol > 0 ? Math.round((v / topVol) * 100) : 0;
-    return `<div style="margin:6px 0">
-      <div class="muted">${escapeHtml(cat)}：${Math.round(v)}</div>
-      <div class="volbar"><div class="volbar-fill" style="width:${pct}%"></div></div>
+  const maxVol = maxCategoryVolumeWithDate(sets, exById, wkById, VOLUME_START_DATE);
+  const volEntries = Object.entries(maxVol).sort((a, b) => b[1].volume - a[1].volume);
+  const volRows = volEntries.map(([cat, info]) => {
+    const [, m, d] = info.date.split('-');
+    return `<div class="vol-row" data-cat="${escapeHtml(cat)}" data-date="${info.date}">
+      <div class="list-item">
+        <span>${escapeHtml(cat)}</span>
+        <span class="pr-badge">${Math.round(info.volume)}kg（${Number(m)}/${Number(d)}）</span>
+      </div>
+      <div class="vol-breakdown muted" style="display:none"></div>
     </div>`;
   }).join('');
   const volCard = volRows
@@ -47,21 +47,17 @@ export async function renderHome(el) {
 
   el.innerHTML = `
     <h2 class="view-title">ホーム</h2>
-    ${countdownCard}
-    <div class="card">
-      <div class="muted">本日のセット数</div>
-      <div class="timer-big" style="font-size:40px">${todayCount}</div>
-    </div>
-    <div class="card">
-      <strong>PR（推定1RM）</strong>
-      ${prRows || '<p class="muted">まだ記録がありません。</p>'}
-    </div>
-    ${volCard}
     <div class="card">
       <strong>トレーニングカレンダー</strong>
       <div id="home-cal" style="margin-top:10px"></div>
       <div id="home-day" style="margin-top:12px"></div>
-    </div>`;
+    </div>
+    ${countdownCard}
+    <details class="card">
+      <summary><strong>推定1RM</strong></summary>
+      <div style="margin-top:10px">${prRows || '<p class="muted">まだ記録がありません。</p>'}</div>
+    </details>
+    ${volCard}`;
 
   const setWorkoutIds = new Set(sets.map((s) => s.workoutId));
   const trainedDates = new Set(
@@ -72,6 +68,26 @@ export async function renderHome(el) {
     trainedDates,
     initialDate: new Date(),
     onSelect: (date) => renderDayDetail(el.querySelector('#home-day'), date, { exercises, nameOf }),
+  });
+
+  el.querySelectorAll('.vol-row').forEach((row) => {
+    row.querySelector('.list-item').addEventListener('click', () => {
+      const bd = row.querySelector('.vol-breakdown');
+      if (bd.style.display === 'block') { bd.style.display = 'none'; return; }
+      const cat = row.dataset.cat;
+      const date = row.dataset.date;
+      const dayWk = workouts.find((w) => w.date === date);
+      const daySets = dayWk
+        ? sets.filter((s) => s.workoutId === dayWk.id && categoryKey(exById[s.exerciseId]) === cat)
+        : [];
+      bd.innerHTML = daySets.length
+        ? daySets.map((s) => `<div class="list-item" style="font-size:13px">
+            <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}</span>
+            <span class="muted">${Math.round(setVolume(s.weight, s.reps, s.assistedReps))}</span>
+          </div>`).join('')
+        : '<p class="muted">内訳なし</p>';
+      bd.style.display = 'block';
+    });
   });
 }
 
