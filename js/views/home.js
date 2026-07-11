@@ -151,7 +151,7 @@ function buildDayData(date, workout, sets, exercises, placeName, logs) {
     const log = logs.find((l) => l.setId === s.id) || {};
     grouped[s.exerciseId].push({
       weight: s.weight, reps: s.reps, assistedReps: s.assistedReps || 0,
-      estimated1RM: s.estimated1RM, tags: log.tags || [], note: log.note || '',
+      estimated1RM: s.estimated1RM, note: log.note || '',
     });
   }
   const exercisesData = order.map((id) => ({

@@ -10,8 +10,8 @@ const sample = {
   volume: { 胸: 600 },
   exercises: [
     { name: 'ベンチプレス', category: '胸', sets: [
-      { weight: 100, reps: 6, assistedReps: 0, estimated1RM: 120, tags: ['調子良い'], note: '' },
-      { weight: 100, reps: 5, assistedReps: 2, estimated1RM: 116, tags: [], note: '効き浅い' },
+      { weight: 100, reps: 6, assistedReps: 0, estimated1RM: 120, note: '' },
+      { weight: 100, reps: 5, assistedReps: 2, estimated1RM: 116, note: '効き浅い' },
     ] },
   ],
 };
@@ -27,9 +27,7 @@ test('workoutToMarkdown includes frontmatter, heading, sets, volume, note', () =
   assert.match(md, /# 2026-06-22 トレーニング/);
   assert.match(md, /## ベンチプレス（胸）/);
   assert.match(md, /- 100kg × 6（推定1RM 120）/);
-  assert.match(md, /- 100kg × 5（補助2）（推定1RM 116）/);
-  assert.match(md, /タグ: 調子良い/);
-  assert.match(md, /メモ: 効き浅い/);
+  assert.match(md, /- 100kg × 5（補助2）（推定1RM 116） — メモ: 効き浅い/);
   assert.match(md, /## 感想\n胸の張りが良い/);
 });
 

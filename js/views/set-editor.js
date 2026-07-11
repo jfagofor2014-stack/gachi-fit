@@ -1,15 +1,13 @@
 import { get, getAll, put, uid } from '../db.js';
 import { estimate1RM } from '../lib/calc.js';
 import { escapeHtml } from './exercises.js';
-import { SENSORY_TAGS } from './workout.js';
 import { createStepper } from './components.js';
 
 // セット編集モーダルを開く。保存/キャンセルで閉じ、変更時に onDone() を呼ぶ。
 export async function openSetEditor(setId, onDone) {
   const set = await get('sets', setId);
   const logs = await getAll('sensoryLogs');
-  const log = logs.find((l) => l.setId === setId) || { tags: [], note: '' };
-  const tagSet = new Set(log.tags || []);
+  const log = logs.find((l) => l.setId === setId) || { note: '' };
 
   const modal = document.createElement('div');
   modal.className = 'card';
@@ -22,16 +20,13 @@ export async function openSetEditor(setId, onDone) {
       <button type="button" id="e-assist-toggle" class="btn btn-block">補助あり：OFF</button>
       <div id="e-assist-wrap" style="display:none;margin-top:8px"><label>補助回数</label><div id="e-assist"></div></div>
     </div>
-    <div class="field"><label>定型タグ</label><div id="e-tags">
-      ${SENSORY_TAGS.map((t) => `<button type="button" class="chip chip-tag ${tagSet.has(t) ? 'sel' : ''}" data-tag="${t}">${t}</button>`).join('')}
-    </div></div>
     <div class="field"><label>メモ</label><input id="e-note" class="input" value="${escapeHtml(log.note || '')}" /></div>
     <div id="e-error" class="error"></div>
     <button id="e-save" class="btn btn-primary btn-block">保存</button>
     <button id="e-cancel" class="btn btn-block" style="margin-top:8px">キャンセル</button>`;
   document.body.appendChild(modal);
 
-  const weightStepper = createStepper(modal.querySelector('#e-weight'), { value: set.weight, step: 2.5, min: 0 });
+  const weightStepper = createStepper(modal.querySelector('#e-weight'), { value: set.weight, step: 0.5, min: 0 });
   const repsStepper = createStepper(modal.querySelector('#e-reps'), { value: set.reps, step: 1, min: 0 });
   const assistStepper = createStepper(modal.querySelector('#e-assist'), { value: set.assistedReps || 0, step: 1, min: 0 });
   let assistOn = !!(set.assistedReps && set.assistedReps > 0);
@@ -46,13 +41,6 @@ export async function openSetEditor(setId, onDone) {
     syncAssist();
   });
 
-  modal.querySelectorAll('#e-tags .chip-tag').forEach((bb) =>
-    bb.addEventListener('click', () => {
-      const t = bb.dataset.tag;
-      if (tagSet.has(t)) { tagSet.delete(t); bb.classList.remove('sel'); }
-      else { tagSet.add(t); bb.classList.add('sel'); }
-    }));
-
   modal.querySelector('#e-cancel').addEventListener('click', () => modal.remove());
   modal.querySelector('#e-save').addEventListener('click', async () => {
     const weight = weightStepper.get();
@@ -64,8 +52,7 @@ export async function openSetEditor(setId, onDone) {
     set.weight = weight; set.reps = reps; set.assistedReps = assistedReps;
     set.estimated1RM = estimate1RM(weight, reps - assistedReps);
     await put('sets', set);
-    const newLog = { id: log.id || uid(), setId,
-      note: modal.querySelector('#e-note').value, tags: [...tagSet] };
+    const newLog = { id: log.id || uid(), setId, note: modal.querySelector('#e-note').value };
     await put('sensoryLogs', newLog);
     modal.remove();
     onDone && onDone();

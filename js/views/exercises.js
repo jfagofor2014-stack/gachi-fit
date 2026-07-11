@@ -1,4 +1,5 @@
 import { getAll, put, remove, uid } from '../db.js';
+import { searchPresets } from '../lib/exercisePresets.js';
 
 export const BODY_PARTS = ['背中', '胸', '肩', '脚', '腕', 'その他'];
 
@@ -9,6 +10,9 @@ export async function renderExercises(el) {
   el.innerHTML = `
     <h2 class="view-title">メニュー管理</h2>
     <div class="card">
+      <div class="field"><label>プリセット検索</label>
+        <input id="ex-search" class="input" placeholder="例: ベンチ / 胸" /></div>
+      <div id="ex-search-results" style="margin-bottom:8px"></div>
       <div class="field"><label>種目名</label>
         <input id="ex-name" class="input" placeholder="例: ベンチプレス" /></div>
       <div class="field"><label>部位（細分化可）</label>
@@ -43,6 +47,21 @@ export async function renderExercises(el) {
       b.classList.add('sel');
       pattern = b.dataset.p;
     }));
+
+  el.querySelector('#ex-search').addEventListener('input', (e) => {
+    const results = searchPresets(e.target.value);
+    el.querySelector('#ex-search-results').innerHTML = results.length
+      ? results.map((p) => `<span class="chip chip-tag" data-preset-name="${escapeHtml(p.name)}" data-preset-part="${escapeHtml(p.bodyPart)}" data-preset-cat="${escapeHtml(p.category)}">${escapeHtml(p.name)}</span>`).join('')
+      : (e.target.value.trim() ? '<p class="muted">候補がありません。</p>' : '');
+    el.querySelectorAll('#ex-search-results [data-preset-name]').forEach((chip) =>
+      chip.addEventListener('click', () => {
+        el.querySelector('#ex-name').value = chip.dataset.presetName;
+        el.querySelector('#ex-part').value = chip.dataset.presetPart;
+        el.querySelector('#ex-cat').value = chip.dataset.presetCat;
+        el.querySelector('#ex-search').value = '';
+        el.querySelector('#ex-search-results').innerHTML = '';
+      }));
+  });
 
   el.querySelector('#ex-save').addEventListener('click', async () => {
     const name = el.querySelector('#ex-name').value.trim();

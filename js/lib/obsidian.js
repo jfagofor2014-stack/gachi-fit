@@ -20,10 +20,7 @@ export function workoutToMarkdown(data) {
       let line = `- ${s.weight}kg × ${s.reps}`;
       if (s.assistedReps) line += `（補助${s.assistedReps}）`;
       line += `（推定1RM ${Math.round(s.estimated1RM)}）`;
-      const extras = [];
-      if (s.tags && s.tags.length) extras.push(`タグ: ${s.tags.join('、')}`);
-      if (s.note) extras.push(`メモ: ${s.note}`);
-      if (extras.length) line += ` — ${extras.join(' / ')}`;
+      if (s.note) line += ` — メモ: ${s.note}`;
       body.push(line);
     }
   }

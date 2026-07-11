@@ -5,11 +5,14 @@ import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
 import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
+import { shouldBeep, playBeep } from '../lib/sound.js';
 import { escapeHtml } from './exercises.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
 
-export const SENSORY_TAGS = ['調子良い', '腹圧抜けた', 'フォーム崩れ', '対象筋に効いた', '関節に違和感', '軽く感じた'];
+const MIN_ROWS = 1;
+const MAX_ROWS = 6;
+const DEFAULT_ROWS = 3;
 
 let intervalTimer;
 
@@ -30,6 +33,10 @@ function patchTodayWorkout(patch = {}) {
   });
   patchQueue = run.catch(() => {});
   return run;
+}
+
+function defaultRowValues(n) {
+  return Array.from({ length: n }, () => ({ weight: 0, reps: 0, assistedReps: 0, assistOn: false }));
 }
 
 export async function renderWorkout(el) {
@@ -77,23 +84,16 @@ export async function renderWorkout(el) {
     <div class="card" id="w-volume"></div>
 
     <div class="card">
-      <div class="field"><label>重量(kg)</label><div id="w-weight"></div></div>
-      <div class="field"><label>回数</label><div id="w-reps"></div></div>
-      <div class="muted">推定1RM: <span id="w-1rm" class="pr-badge">-</span></div>
-      <div class="field" style="margin-top:12px">
-        <button type="button" id="w-assist-toggle" class="btn btn-block">補助あり：OFF</button>
-        <div id="w-assist-wrap" style="display:none;margin-top:8px">
-          <label>補助回数</label><div id="w-assist"></div>
-        </div>
+      <strong>セット入力</strong>
+      <div id="w-rows" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" id="w-row-add" class="btn">＋ 行を追加</button>
+        <button type="button" id="w-row-remove" class="btn">− 行を削除</button>
       </div>
-      <div class="field" style="margin-top:12px"><label>定型タグ（複数可）</label>
-        <div id="w-tags">
-          ${SENSORY_TAGS.map((t) => `<button type="button" class="chip chip-tag" data-tag="${t}">${t}</button>`).join('')}
-        </div></div>
-      <div class="field"><label>メモ（任意）</label>
+      <div class="field" style="margin-top:12px"><label>メモ（任意・全セット共通）</label>
         <input id="w-note" class="input" placeholder="例: 3セット目から効きが浅い" /></div>
       <div id="w-error" class="error"></div>
-      <button id="w-save" class="btn btn-primary btn-block">セット記録</button>
+      <button id="w-save" class="btn btn-primary btn-block" style="margin-top:8px">まとめて記録</button>
     </div>
 
     <div class="card">
@@ -117,18 +117,74 @@ export async function renderWorkout(el) {
 
     <div class="card"><strong>本日のセット</strong><div id="w-today"></div></div>`;
 
-  const state = { tags: new Set(), note: '', interval: defaultSec };
+  const state = { interval: defaultSec };
+  let rowValues = defaultRowValues(DEFAULT_ROWS);
+  let rowSteppers = [];
 
-  const weightStepper = createStepper(el.querySelector('#w-weight'), { value: 0, step: 2.5, min: 0, onChange: refresh1RM });
-  const repsStepper = createStepper(el.querySelector('#w-reps'), { value: 0, step: 1, min: 0, onChange: refresh1RM });
-  const assistStepper = createStepper(el.querySelector('#w-assist'), { value: 0, step: 1, min: 0, onChange: refresh1RM });
-  let assistOn = false;
-  el.querySelector('#w-assist-toggle').addEventListener('click', () => {
-    assistOn = !assistOn;
-    el.querySelector('#w-assist-toggle').textContent = '補助あり：' + (assistOn ? 'ON' : 'OFF');
-    el.querySelector('#w-assist-wrap').style.display = assistOn ? 'block' : 'none';
-    if (!assistOn) assistStepper.set(0);
-    refresh1RM();
+  function refreshRow1RM(i) {
+    const rs = rowSteppers[i];
+    const w = rs.weight.get();
+    const r = rs.reps.get();
+    const a = rs.assistOn ? rs.assist.get() : 0;
+    const selfReps = r - a;
+    el.querySelector(`#w-row-1rm-${i}`).textContent =
+      '推定1RM: ' + (w > 0 && selfReps > 0 ? estimate1RM(w, selfReps).toFixed(1) + 'kg' : '-');
+  }
+
+  function syncRowValuesFromSteppers() {
+    rowSteppers.forEach((rs, i) => {
+      rowValues[i] = {
+        weight: rs.weight.get(), reps: rs.reps.get(),
+        assistedReps: rs.assistOn ? rs.assist.get() : 0,
+        assistOn: rs.assistOn,
+      };
+    });
+  }
+
+  function renderRows() {
+    const wrap = el.querySelector('#w-rows');
+    wrap.innerHTML = rowValues.map((rv, i) => `
+      <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1f1f1f">
+        <div class="muted" style="margin-bottom:6px">セット ${i + 1}</div>
+        <div class="row">
+          <div class="field"><label>重量(kg)</label><div id="w-row-weight-${i}"></div></div>
+          <div class="field"><label>回数</label><div id="w-row-reps-${i}"></div></div>
+        </div>
+        <button type="button" id="w-row-assist-toggle-${i}" class="btn btn-block">補助あり：${rv.assistOn ? 'ON' : 'OFF'}</button>
+        <div id="w-row-assist-wrap-${i}" style="display:${rv.assistOn ? 'block' : 'none'};margin-top:8px">
+          <label>補助回数</label><div id="w-row-assist-${i}"></div>
+        </div>
+        <div class="muted" id="w-row-1rm-${i}" style="margin-top:6px">推定1RM: -</div>
+      </div>`).join('');
+
+    rowSteppers = rowValues.map((rv, i) => {
+      const weight = createStepper(el.querySelector(`#w-row-weight-${i}`), { value: rv.weight, step: 0.5, min: 0, onChange: () => refreshRow1RM(i) });
+      const reps = createStepper(el.querySelector(`#w-row-reps-${i}`), { value: rv.reps, step: 1, min: 0, onChange: () => refreshRow1RM(i) });
+      const assist = createStepper(el.querySelector(`#w-row-assist-${i}`), { value: rv.assistedReps, step: 1, min: 0, onChange: () => refreshRow1RM(i) });
+      const rs = { weight, reps, assist, assistOn: rv.assistOn };
+      el.querySelector(`#w-row-assist-toggle-${i}`).addEventListener('click', () => {
+        rs.assistOn = !rs.assistOn;
+        el.querySelector(`#w-row-assist-toggle-${i}`).textContent = '補助あり：' + (rs.assistOn ? 'ON' : 'OFF');
+        el.querySelector(`#w-row-assist-wrap-${i}`).style.display = rs.assistOn ? 'block' : 'none';
+        if (!rs.assistOn) assist.set(0);
+        refreshRow1RM(i);
+      });
+      return rs;
+    });
+    rowValues.forEach((_, i) => refreshRow1RM(i));
+    el.querySelector('#w-row-add').disabled = rowValues.length >= MAX_ROWS;
+    el.querySelector('#w-row-remove').disabled = rowValues.length <= MIN_ROWS;
+  }
+
+  el.querySelector('#w-row-add').addEventListener('click', () => {
+    syncRowValuesFromSteppers();
+    if (rowValues.length < MAX_ROWS) rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false });
+    renderRows();
+  });
+  el.querySelector('#w-row-remove').addEventListener('click', () => {
+    syncRowValuesFromSteppers();
+    if (rowValues.length > MIN_ROWS) rowValues.pop();
+    renderRows();
   });
 
   function refreshPR() {
@@ -140,15 +196,6 @@ export async function renderWorkout(el) {
     const ex = exercises.find((e) => e.id === exId);
     el.querySelector('#w-cues').innerHTML =
       (ex?.cuePresets || []).map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('');
-  }
-
-  function refresh1RM() {
-    const w = weightStepper.get();
-    const r = repsStepper.get();
-    const a = assistOn ? assistStepper.get() : 0;
-    const selfReps = r - a;
-    el.querySelector('#w-1rm').textContent =
-      w > 0 && selfReps > 0 ? estimate1RM(w, selfReps).toFixed(1) + 'kg' : '-';
   }
 
   async function refreshVolumeBar() {
@@ -172,13 +219,6 @@ export async function renderWorkout(el) {
   }
 
   el.querySelector('#w-ex').addEventListener('change', () => { refreshPR(); refreshVolumeBar(); });
-  el.querySelectorAll('#w-tags .chip-tag').forEach((b) =>
-    b.addEventListener('click', () => {
-      const t = b.dataset.tag;
-      if (state.tags.has(t)) { state.tags.delete(t); b.classList.remove('sel'); }
-      else { state.tags.add(t); b.classList.add('sel'); }
-    }));
-  el.querySelector('#w-note').addEventListener('input', (e) => (state.note = e.target.value));
 
   // 場所
   el.querySelector('#w-place').addEventListener('change', async (e) => {
@@ -196,10 +236,13 @@ export async function renderWorkout(el) {
   el.querySelector('#w-start').addEventListener('change', saveTimeRange);
   el.querySelector('#w-end').addEventListener('change', saveTimeRange);
 
-  // インターバル（独立）
+  // インターバル（独立、終了10秒前にビープ）
   bindSeg(el, '#w-int-secs', (v) => (state.interval = Number(v)), defaultSec, 's');
   intervalTimer = createTimer({
-    onTick: (s) => (el.querySelector('#w-timer').textContent = formatTime(s)),
+    onTick: (s) => {
+      el.querySelector('#w-timer').textContent = formatTime(s);
+      if (shouldBeep(s)) playBeep();
+    },
     onDone: () => (el.querySelector('#w-timer').style.display = 'none'),
   });
   el.querySelector('#w-int-start').addEventListener('click', () => {
@@ -218,37 +261,42 @@ export async function renderWorkout(el) {
     setTimeout(() => { el.querySelector('#w-impression-save').textContent = '感想を保存'; }, 1500);
   });
 
-  // セット記録（保存のみ）
+  // まとめて記録
   el.querySelector('#w-save').addEventListener('click', async () => {
+    syncRowValuesFromSteppers();
     const err = el.querySelector('#w-error');
-    const weight = weightStepper.get();
-    const reps = repsStepper.get();
-    const assistedReps = assistOn ? assistStepper.get() : 0;
-    if (!(weight > 0) || !(reps > 0)) { err.textContent = '重量と回数を正しく入力してください'; return; }
-    if (assistedReps > reps) { err.textContent = '補助回数は回数以下にしてください'; return; }
+    const filled = rowValues.filter((rv) => rv.weight > 0 && rv.reps > 0);
+    if (!filled.length) { err.textContent = '少なくとも1セット入力してください'; return; }
+    for (const rv of rowValues) {
+      if (rv.weight > 0 && rv.reps > 0 && rv.assistedReps > rv.reps) {
+        err.textContent = '補助回数は回数以下にしてください'; return;
+      }
+    }
     err.textContent = '';
     const exerciseId = el.querySelector('#w-ex').value;
     const workout = await patchTodayWorkout();
-    const est = estimate1RM(weight, reps - assistedReps);
-    const setId = uid();
-    await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight, reps, assistedReps,
-      estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: Date.now() });
-    await put('sensoryLogs', { id: uid(), setId, note: state.note, tags: [...state.tags] });
-    state.tags.clear();
-    state.note = '';
-    el.querySelectorAll('#w-tags .chip-tag').forEach((b) => b.classList.remove('sel'));
+    const note = el.querySelector('#w-note').value;
+    const base = Date.now();
+    let i = 0;
+    for (const rv of filled) {
+      const est = estimate1RM(rv.weight, rv.reps - rv.assistedReps);
+      const setId = uid();
+      await put('sets', { id: setId, workoutId: workout.id, exerciseId, weight: rv.weight, reps: rv.reps,
+        assistedReps: rv.assistedReps, estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: base + i });
+      await put('sensoryLogs', { id: uid(), setId, note });
+      i++;
+    }
     el.querySelector('#w-note').value = '';
-    assistOn = false;
-    assistStepper.set(0);
-    el.querySelector('#w-assist-toggle').textContent = '補助あり：OFF';
-    el.querySelector('#w-assist-wrap').style.display = 'none';
+    rowValues = defaultRowValues(DEFAULT_ROWS);
+    renderRows();
     const saveBtn = el.querySelector('#w-save');
-    saveBtn.textContent = '保存しました';
-    setTimeout(() => { saveBtn.textContent = 'セット記録'; }, 1500);
+    saveBtn.textContent = `保存しました（${filled.length}セット）`;
+    setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
     await renderToday(el, exercises);
     await refreshVolumeBar();
   });
 
+  renderRows();
   refreshPR();
   await refreshVolumeBar();
   await renderToday(el, exercises);
