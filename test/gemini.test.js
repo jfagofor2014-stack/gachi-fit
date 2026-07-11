@@ -2,22 +2,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildInsightPrompt, callGemini } from '../js/lib/gemini.js';
 
-test('buildInsightPrompt includes PR and tag stats', () => {
+test('buildInsightPrompt includes PR stats', () => {
   const stats = {
     prs: [{ name: 'ベンチプレス', pr: 126.7 }],
-    tagFreq: [{ tag: '腹圧抜けた', count: 3 }],
-    scoreCorr: [{ tag: '腹圧抜けた', direction: 'lower' }],
     recentCount: 12,
   };
   const p = buildInsightPrompt(stats);
   assert.match(p, /ベンチプレス/);
   assert.match(p, /126\.7/);
-  assert.match(p, /腹圧抜けた/);
+  assert.doesNotMatch(p, /タグ/);
 });
 
 test('buildInsightPrompt includes workout notes', () => {
   const stats = {
-    prs: [], tagFreq: [], scoreCorr: [], recentCount: 3,
+    prs: [], recentCount: 3,
     workoutNotes: ['今日は調子が良かった', '腰に張りがある'],
   };
   const p = buildInsightPrompt(stats);
