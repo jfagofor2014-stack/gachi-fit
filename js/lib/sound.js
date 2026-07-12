@@ -1,6 +1,11 @@
-// 残り秒数がアラート対象かどうか（純粋関数）
+// 残り秒数がカウントダウンビープ対象か（残り1〜thresholdSec秒、純粋関数）
 export function shouldBeep(remaining, thresholdSec = 10) {
-  return remaining === thresholdSec;
+  return remaining > 0 && remaining <= thresholdSec;
+}
+
+// 0秒到達時の終了ビープ対象か（純粋関数）
+export function shouldFinalBeep(remaining) {
+  return remaining === 0;
 }
 
 // ビープ音を1回再生する（Web Audio API、外部ファイル不要。ブラウザ専用）

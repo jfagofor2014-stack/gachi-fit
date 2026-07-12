@@ -5,7 +5,7 @@ import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
 import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
-import { shouldBeep, playBeep } from '../lib/sound.js';
+import { shouldBeep, shouldFinalBeep, playBeep } from '../lib/sound.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
 import { escapeHtml } from './exercises.js';
 import { createStepper } from './components.js';
@@ -44,7 +44,7 @@ function patchTodayWorkout(patch = {}) {
 }
 
 function defaultRowValues(n) {
-  return Array.from({ length: n }, () => ({ weight: 0, reps: 0, assistedReps: 0, assistOn: false }));
+  return Array.from({ length: n }, () => ({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }));
 }
 
 export async function renderWorkout(el) {
@@ -182,6 +182,7 @@ export async function renderWorkout(el) {
         weight: rs.weight.get(), reps: rs.reps.get(),
         assistedReps: rs.assist && rs.assistOn ? rs.assist.get() : 0,
         assistOn: rs.assist ? rs.assistOn : false,
+        weightTouched: rowValues[i] ? rowValues[i].weightTouched : false,
       };
     });
   }
@@ -192,10 +193,8 @@ export async function renderWorkout(el) {
     wrap.innerHTML = rowValues.map((rv, i) => `
       <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1f1f1f">
         <div class="muted" style="margin-bottom:6px">セット ${i + 1}</div>
-        <div class="row">
-          <div class="field"><label>重量(kg)</label><div id="w-row-weight-${i}"></div></div>
-          <div class="field"><label>回数</label><div id="w-row-reps-${i}"></div></div>
-        </div>
+        <div class="field"><label>重量(kg)</label><div id="w-row-weight-${i}"></div></div>
+        <div class="field"><label>回数</label><div id="w-row-reps-${i}"></div></div>
         ${showAssist ? `
         <button type="button" id="w-row-assist-toggle-${i}" class="btn btn-block">補助あり：${rv.assistOn ? 'ON' : 'OFF'}</button>
         <div id="w-row-assist-wrap-${i}" style="display:${rv.assistOn ? 'block' : 'none'};margin-top:8px">
@@ -205,7 +204,24 @@ export async function renderWorkout(el) {
       </div>`).join('');
 
     rowSteppers = rowValues.map((rv, i) => {
-      const weight = createStepper(el.querySelector(`#w-row-weight-${i}`), { value: rv.weight, step: 0.5, min: 0, onChange: () => refreshRow1RM(i) });
+      const weight = createStepper(el.querySelector(`#w-row-weight-${i}`), {
+        value: rv.weight, step: 0.5, min: 0,
+        onChange: (v) => {
+          refreshRow1RM(i);
+          if (mode !== 'normal') return;
+          if (i === 0) {
+            rowSteppers.forEach((otherRs, j) => {
+              if (j > 0 && !rowValues[j].weightTouched) {
+                otherRs.weight.set(v);
+                rowValues[j].weight = v;
+                refreshRow1RM(j);
+              }
+            });
+          } else {
+            rowValues[i].weightTouched = true;
+          }
+        },
+      });
       const reps = createStepper(el.querySelector(`#w-row-reps-${i}`), { value: rv.reps, step: 1, min: 0, onChange: () => refreshRow1RM(i) });
       if (!showAssist) return { weight, reps, assist: null, assistOn: false };
       const assist = createStepper(el.querySelector(`#w-row-assist-${i}`), { value: rv.assistedReps, step: 1, min: 0, onChange: () => refreshRow1RM(i) });
@@ -226,7 +242,10 @@ export async function renderWorkout(el) {
 
   el.querySelector('#w-row-add').addEventListener('click', () => {
     syncRowValuesFromSteppers();
-    if (rowValues.length < MAX_ROWS) rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false });
+    if (rowValues.length < MAX_ROWS) {
+      const initialWeight = mode === 'normal' ? rowValues[0].weight : 0;
+      rowValues.push({ weight: initialWeight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
+    }
     renderRows();
   });
   el.querySelector('#w-row-remove').addEventListener('click', () => {
@@ -265,9 +284,10 @@ export async function renderWorkout(el) {
       <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1f1f1f">
         <div class="muted" style="margin-bottom:6px">ラウンド ${r + 1}</div>
         ${ssExerciseIds.map((exId, e) => `
-          <div class="row">
-            <div class="field"><label>${escapeHtml(exerciseName(exId))} 重量(kg)</label><div id="w-ss-weight-${r}-${e}"></div></div>
-            <div class="field"><label>${escapeHtml(exerciseName(exId))} 回数</label><div id="w-ss-reps-${r}-${e}"></div></div>
+          <div style="margin-bottom:10px">
+            <div class="muted" style="margin-bottom:4px">${escapeHtml(exerciseName(exId))}</div>
+            <div class="field"><label>重量(kg)</label><div id="w-ss-weight-${r}-${e}"></div></div>
+            <div class="field"><label>回数</label><div id="w-ss-reps-${r}-${e}"></div></div>
           </div>`).join('')}
       </div>`).join('');
 
@@ -383,12 +403,13 @@ export async function renderWorkout(el) {
   el.querySelector('#w-start').addEventListener('change', saveTimeRange);
   el.querySelector('#w-end').addEventListener('change', saveTimeRange);
 
-  // インターバル（独立、終了10秒前にビープ）
+  // インターバル（独立、残り10秒から毎秒ビープ、0秒で長めの音）
   bindSeg(el, '#w-int-secs', (v) => (state.interval = Number(v)), defaultSec, 's');
   intervalTimer = createTimer({
     onTick: (s) => {
       el.querySelector('#w-timer').textContent = formatTime(s);
-      if (shouldBeep(s)) playBeep();
+      if (shouldFinalBeep(s)) playBeep({ frequency: 1200, durationMs: 400 });
+      else if (shouldBeep(s)) playBeep();
     },
     onDone: () => (el.querySelector('#w-timer').style.display = 'none'),
   });
