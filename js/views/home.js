@@ -144,7 +144,7 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
 
   box.querySelector('#day-note').addEventListener('change', async (e) => {
     const w = await get('workouts', workout.id);
-    if (w) { w.note = e.target.value; await put('workouts', w); }
+    if (w) { w.note = e.target.value; await put('workouts', w); data.note = e.target.value; }
   });
 
   box.querySelectorAll('[data-edit]').forEach((b) =>
