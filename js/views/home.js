@@ -1,9 +1,10 @@
-import { getAll, get } from '../db.js';
+import { getAll, get, put, remove } from '../db.js';
 import { computePRs } from '../lib/calc.js';
 import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
 import { escapeHtml } from './exercises.js';
 import { renderCalendar } from './calendar.js';
+import { openSetEditor } from './set-editor.js';
 import { localDateStr } from '../lib/localdate.js';
 import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
@@ -109,14 +110,19 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
   ].filter(Boolean).join(' / ');
 
   const rows = sets.map((s) => `<div class="list-item">
-      <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}</span>
-      <span class="muted">1RM ${s.estimated1RM.toFixed(0)}</span>
+      <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}<br>
+        <span class="muted" style="font-size:12px">1RM ${s.estimated1RM.toFixed(0)}</span></span>
+      <span>
+        <button class="btn btn-edit" data-edit="${s.id}" style="min-height:40px;padding:0 12px">編集</button>
+        <button class="btn btn-danger" data-del="${s.id}" style="min-height:40px;padding:0 12px">削除</button>
+      </span>
     </div>`).join('') || '<p class="muted">セットなし</p>';
 
   box.innerHTML = `<strong>${date}</strong>
     ${meta ? `<div class="muted" style="margin:4px 0">${meta}</div>` : ''}
     ${rows}
-    ${workout.note ? `<div class="muted" style="margin-top:8px">感想: ${escapeHtml(workout.note)}</div>` : ''}
+    <div class="field" style="margin-top:8px"><label>感想</label>
+      <textarea id="day-note" class="input" rows="3" style="resize:vertical">${escapeHtml(workout.note || '')}</textarea></div>
     <div class="row" style="margin-top:10px">
       <button id="day-obsidian" class="btn btn-primary">Obsidianに送る</button>
       <button id="day-md" class="btn">Markdown DL</button>
@@ -135,6 +141,21 @@ async function renderDayDetail(box, date, { exercises, nameOf }) {
   box.querySelector('#day-md').addEventListener('click', () => {
     downloadText(workoutToMarkdown(data), fileName);
   });
+
+  box.querySelector('#day-note').addEventListener('change', async (e) => {
+    const w = await get('workouts', workout.id);
+    if (w) { w.note = e.target.value; await put('workouts', w); }
+  });
+
+  box.querySelectorAll('[data-edit]').forEach((b) =>
+    b.addEventListener('click', () => openSetEditor(b.dataset.edit, () => renderDayDetail(box, date, { exercises, nameOf }))));
+  box.querySelectorAll('[data-del]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      await remove('sets', b.dataset.del);
+      const allLogs = await getAll('sensoryLogs');
+      for (const l of allLogs.filter((l) => l.setId === b.dataset.del)) await remove('sensoryLogs', l.id);
+      renderDayDetail(box, date, { exercises, nameOf });
+    }));
 }
 
 function buildDayData(date, workout, sets, exercises, placeName, logs) {
