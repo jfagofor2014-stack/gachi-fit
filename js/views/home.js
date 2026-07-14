@@ -6,8 +6,9 @@ import { escapeHtml } from './exercises.js';
 import { renderCalendar } from './calendar.js';
 import { openSetEditor } from './set-editor.js';
 import { localDateStr } from '../lib/localdate.js';
-import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE } from '../lib/volume.js';
+import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
+import { stepPath } from '../lib/chart.js';
 
 export async function renderHome(el) {
   const exercises = await getAll('exercises');
@@ -81,12 +82,25 @@ export async function renderHome(el) {
       const daySets = dayWk
         ? sets.filter((s) => s.workoutId === dayWk.id && categoryKey(exById[s.exerciseId]) === cat)
         : [];
-      bd.innerHTML = daySets.length
+
+      const progression = categoryPRProgression(dailyCategoryVolumes(sets, exById, wkById, cat, VOLUME_START_DATE));
+      let chartHtml = '';
+      if (progression.length >= 2) {
+        const d = stepPath(progression.map((p) => p.volume), 300, 44);
+        const first = progression[0];
+        const last = progression[progression.length - 1];
+        chartHtml = `<svg class="spark" viewBox="0 0 300 44" preserveAspectRatio="none"><path d="${d}" /></svg>
+          <div class="muted" style="font-size:12px;margin:2px 0 8px">${first.date} ${Math.round(first.volume)}kg → ${last.date} ${Math.round(last.volume)}kg</div>`;
+      }
+
+      const breakdownHtml = daySets.length
         ? daySets.map((s) => `<div class="list-item" style="font-size:13px">
             <span>${escapeHtml(nameOf(s.exerciseId))} ${s.weight}kg × ${s.reps}${s.assistedReps ? `（補助${s.assistedReps}）` : ''}</span>
             <span class="muted">${Math.round(setVolume(s.weight, s.reps, s.assistedReps))}</span>
           </div>`).join('')
         : '<p class="muted">内訳なし</p>';
+
+      bd.innerHTML = chartHtml + breakdownHtml;
       bd.style.display = 'block';
     });
   });
