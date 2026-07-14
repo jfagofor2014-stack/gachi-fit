@@ -71,3 +71,31 @@ export function maxCategoryVolumeWithDate(sets, exById, wkById, sinceDate) {
   }
   return out;
 }
+
+// 指定部位の日別ボリューム合計を日付昇順で返す（sinceDate以降のみ）
+export function dailyCategoryVolumes(sets, exById, wkById, cat, sinceDate) {
+  const perDate = {};
+  for (const s of sets) {
+    const wk = wkById[s.workoutId];
+    if (!wk) continue;
+    if (sinceDate && wk.date < sinceDate) continue;
+    if (categoryKey(exById[s.exerciseId]) !== cat) continue;
+    perDate[wk.date] = (perDate[wk.date] || 0) + setVolume(s.weight, s.reps, s.assistedReps);
+  }
+  return Object.entries(perDate)
+    .map(([date, volume]) => ({ date, volume }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+// 日別ボリューム列から、自己ベストが更新された点だけを時系列順に残す（階段状の推移）
+export function categoryPRProgression(dailyVolumes) {
+  const out = [];
+  let best = -Infinity;
+  for (const point of dailyVolumes) {
+    if (point.volume > best) {
+      best = point.volume;
+      out.push(point);
+    }
+  }
+  return out;
+}
