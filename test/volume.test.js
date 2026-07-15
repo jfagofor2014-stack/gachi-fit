@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setVolume, categoryVolumeForDate, maxCategoryVolumeExcludingDate } from '../js/lib/volume.js';
+import { setVolume, categoryVolumeForDate, maxCategoryVolumeExcludingDate, dailyCategoryVolumes, categoryPRProgression } from '../js/lib/volume.js';
 
 test('setVolume without assist is weight*reps', () => {
   assert.equal(setVolume(100, 8, 0), 800);
@@ -81,4 +81,53 @@ test('maxCategoryVolumeWithDate returns max daily total and its date', () => {
   const r = maxCategoryVolumeWithDate(sets, exById, wkById, '2026-06-28');
   assert.equal(r['胸'].volume, 800);
   assert.equal(r['胸'].date, '2026-06-30');
+});
+
+test('dailyCategoryVolumes filters by category and sinceDate, sorted ascending', () => {
+  const exById = { e1: { id: 'e1', bodyPart: '胸' }, e2: { id: 'e2', bodyPart: '背中' } };
+  const wkById = {
+    w0: { id: 'w0', date: '2026-06-27' },
+    w1: { id: 'w1', date: '2026-06-30' },
+    w2: { id: 'w2', date: '2026-06-28' },
+  };
+  const sets = [
+    { exerciseId: 'e1', workoutId: 'w0', weight: 100, reps: 10, assistedReps: 0 }, // sinceDate前なので除外
+    { exerciseId: 'e1', workoutId: 'w1', weight: 100, reps: 5, assistedReps: 0 },
+    { exerciseId: 'e2', workoutId: 'w1', weight: 80, reps: 5, assistedReps: 0 }, // 別部位なので除外
+    { exerciseId: 'e1', workoutId: 'w2', weight: 50, reps: 4, assistedReps: 0 },
+  ];
+  const result = dailyCategoryVolumes(sets, exById, wkById, '胸', '2026-06-28');
+  assert.deepEqual(result, [
+    { date: '2026-06-28', volume: 200 },
+    { date: '2026-06-30', volume: 500 },
+  ]);
+});
+
+test('dailyCategoryVolumes returns empty array when no matching data', () => {
+  const result = dailyCategoryVolumes([], {}, {}, '胸', '2026-06-28');
+  assert.deepEqual(result, []);
+});
+
+test('categoryPRProgression keeps only monotonically increasing points', () => {
+  const daily = [
+    { date: '2026-06-28', volume: 200 },
+    { date: '2026-06-29', volume: 150 },
+    { date: '2026-06-30', volume: 500 },
+    { date: '2026-07-01', volume: 500 },
+    { date: '2026-07-02', volume: 800 },
+  ];
+  assert.deepEqual(categoryPRProgression(daily), [
+    { date: '2026-06-28', volume: 200 },
+    { date: '2026-06-30', volume: 500 },
+    { date: '2026-07-02', volume: 800 },
+  ]);
+});
+
+test('categoryPRProgression with a single point returns that point', () => {
+  const daily = [{ date: '2026-06-28', volume: 200 }];
+  assert.deepEqual(categoryPRProgression(daily), daily);
+});
+
+test('categoryPRProgression with empty input returns empty array', () => {
+  assert.deepEqual(categoryPRProgression([]), []);
 });
