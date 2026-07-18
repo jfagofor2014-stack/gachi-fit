@@ -3,7 +3,7 @@ import { estimate1RM, computePRs } from '../lib/calc.js';
 import { createTimer, formatTime } from '../timer.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
-import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, VOLUME_START_DATE } from '../lib/volume.js';
+import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, categoriesWithExercises, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
 import { shouldBeep, shouldFinalBeep, playBeep } from '../lib/sound.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
@@ -47,7 +47,7 @@ function defaultRowValues(n) {
   return Array.from({ length: n }, () => ({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }));
 }
 
-export async function renderWorkout(el) {
+export async function renderWorkout(el, navigate, opts = {}) {
   const exercises = await getAll('exercises');
   const allSets = await getAll('sets');
   const prs = computePRs(allSets);
@@ -159,11 +159,8 @@ export async function renderWorkout(el) {
     const cat = categoryKey(e);
     (exPartGroups[cat] ||= []).push(e);
   }
-  const exParts = [
-    ...BODY_PARTS.filter((p) => exPartGroups[p]),
-    ...Object.keys(exPartGroups).filter((p) => !BODY_PARTS.includes(p)),
-  ];
-  let currentExPart = exParts[0];
+  const exParts = categoriesWithExercises(exercises, BODY_PARTS);
+  let currentExPart = (opts.initialPart && exParts.includes(opts.initialPart)) ? opts.initialPart : exParts[0];
 
   function renderExPartSeg() {
     el.querySelector('#w-ex-part-seg').innerHTML = exParts

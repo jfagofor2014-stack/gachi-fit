@@ -99,3 +99,12 @@ export function categoryPRProgression(dailyVolumes) {
   }
   return out;
 }
+
+// 種目が1件以上ある部位を bodyParts の順→それ以外の順で返す
+export function categoriesWithExercises(exercises, bodyParts) {
+  const set = new Set(exercises.map((e) => categoryKey(e)));
+  return [
+    ...bodyParts.filter((p) => set.has(p)),
+    ...[...set].filter((p) => !bodyParts.includes(p)),
+  ];
+}
