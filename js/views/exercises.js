@@ -15,12 +15,12 @@ export async function renderExercises(el) {
       <div id="ex-search-results" style="margin-bottom:8px"></div>
       <div class="field"><label>種目名</label>
         <input id="ex-name" class="input" placeholder="例: ベンチプレス" /></div>
-      <div class="field"><label>部位（細分化可）</label>
-        <input id="ex-part" class="input" placeholder="例: 胸 / 上部" /></div>
       <div class="field"><label>主要部位</label>
         <select id="ex-cat" class="input">
           ${BODY_PARTS.map((p) => `<option value="${p}">${p}</option>`).join('')}
         </select></div>
+      <div class="field"><label>詳細（任意）</label>
+        <input id="ex-detail" class="input" placeholder="例: 上部" /></div>
       <div class="field"><label>意識ポイント（カンマ区切り）</label>
         <input id="ex-cues" class="input" placeholder="例: 肩甲骨下制, 腹圧" /></div>
       <div class="field"><label>セットパターン</label>
@@ -56,8 +56,8 @@ export async function renderExercises(el) {
     el.querySelectorAll('#ex-search-results [data-preset-name]').forEach((chip) =>
       chip.addEventListener('click', () => {
         el.querySelector('#ex-name').value = chip.dataset.presetName;
-        el.querySelector('#ex-part').value = chip.dataset.presetPart;
         el.querySelector('#ex-cat').value = chip.dataset.presetCat;
+        el.querySelector('#ex-detail').value = chip.dataset.presetPart.split('/').slice(1).join('/');
         el.querySelector('#ex-search').value = '';
         el.querySelector('#ex-search-results').innerHTML = '';
       }));
@@ -65,11 +65,12 @@ export async function renderExercises(el) {
 
   el.querySelector('#ex-save').addEventListener('click', async () => {
     const name = el.querySelector('#ex-name').value.trim();
-    const bodyPart = el.querySelector('#ex-part').value.trim();
+    const category = el.querySelector('#ex-cat').value;
+    const detail = el.querySelector('#ex-detail').value.trim();
+    const bodyPart = detail ? `${category}/${detail}` : category;
     const cuePresets = el.querySelector('#ex-cues').value
       .split(',').map((s) => s.trim()).filter(Boolean);
     if (!name) { el.querySelector('#ex-error').textContent = '種目名を入力してください'; return; }
-    const category = el.querySelector('#ex-cat').value;
     await put('exercises', { id: uid(), name, bodyPart, cuePresets, setPattern: pattern, category });
     renderExercises(el);
   });
@@ -118,7 +119,6 @@ function renderList(el, exercises) {
           <strong>${escapeHtml(e.name)}</strong>
           <span class="muted"> ${escapeHtml(e.bodyPart || '')}</span>
           <div>${(e.cuePresets || []).map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>
-          ${e.category ? `<span class="chip">${escapeHtml(e.category)}</span>` : ''}
           <span class="chip">${escapeHtml(e.setPattern || '通常')}</span>
         </div>
         <button class="btn btn-danger" data-del="${e.id}">削除</button>
