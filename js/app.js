@@ -24,12 +24,12 @@ const routes = {
   more: renderMore,
 };
 
-async function navigate(route) {
+async function navigate(route, opts) {
   const el = document.getElementById('view');
   document.querySelectorAll('.tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.route === route && TAB_ROUTES.includes(route)));
   const render = routes[route] || renderHome;
-  await render(el, navigate);
+  await render(el, navigate, opts);
 }
 
 document.querySelectorAll('.tab').forEach((btn) => {

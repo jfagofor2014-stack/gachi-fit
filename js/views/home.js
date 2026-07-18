@@ -2,15 +2,16 @@ import { getAll, get, put, remove } from '../db.js';
 import { computePRs } from '../lib/calc.js';
 import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml, BODY_PARTS } from './exercises.js';
 import { renderCalendar } from './calendar.js';
 import { openSetEditor } from './set-editor.js';
 import { localDateStr } from '../lib/localdate.js';
-import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression } from '../lib/volume.js';
+import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression, categoriesWithExercises } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
 import { stepPath } from '../lib/chart.js';
+import { lastTrainedDateByCategory, suggestBodyParts } from '../lib/suggest.js';
 
-export async function renderHome(el) {
+export async function renderHome(el, navigate) {
   const exercises = await getAll('exercises');
   const sets = await getAll('sets');
   const prs = computePRs(sets);
@@ -31,6 +32,19 @@ export async function renderHome(el) {
 
   const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
+
+  const suggestCategories = categoriesWithExercises(exercises, BODY_PARTS);
+  const lastTrained = lastTrainedDateByCategory(sets, exById, wkById);
+  const suggested = suggestBodyParts(suggestCategories, lastTrained, new Date());
+  const suggestCard = suggested.length
+    ? `<div class="card">
+        <strong>お帰りなさい。今日はどんなトレーニングをしますか？</strong>
+        <div class="row" style="margin-top:10px">
+          ${suggested.map((cat) => `<button type="button" class="btn btn-primary" data-suggest-part="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join('')}
+        </div>
+      </div>`
+    : '';
+
   const maxVol = maxCategoryVolumeWithDate(sets, exById, wkById, VOLUME_START_DATE);
   const volEntries = Object.entries(maxVol).sort((a, b) => b[1].volume - a[1].volume);
   const volRows = volEntries.map(([cat, info]) => {
@@ -49,6 +63,7 @@ export async function renderHome(el) {
 
   el.innerHTML = `
     <h2 class="view-title">ホーム</h2>
+    ${suggestCard}
     <div class="card">
       <strong>トレーニングカレンダー</strong>
       <div id="home-cal" style="margin-top:10px"></div>
@@ -71,6 +86,9 @@ export async function renderHome(el) {
     initialDate: new Date(),
     onSelect: (date) => renderDayDetail(el.querySelector('#home-day'), date, { exercises, nameOf }),
   });
+
+  el.querySelectorAll('[data-suggest-part]').forEach((b) =>
+    b.addEventListener('click', () => navigate('workout', { initialPart: b.dataset.suggestPart })));
 
   el.querySelectorAll('.vol-row').forEach((row) => {
     row.querySelector('.list-item').addEventListener('click', () => {
