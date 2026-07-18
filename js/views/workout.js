@@ -7,7 +7,7 @@ import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, VOL
 import { localDateStr } from '../lib/localdate.js';
 import { shouldBeep, shouldFinalBeep, playBeep } from '../lib/sound.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml, BODY_PARTS } from './exercises.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
 
@@ -81,10 +81,10 @@ export async function renderWorkout(el) {
     </div>
 
     <div class="card" id="w-ex-card">
+      <div class="field"><label>部位</label>
+        <div class="seg" id="w-ex-part-seg" style="margin-top:8px"></div></div>
       <div class="field"><label>種目</label>
-        <select id="w-ex" class="input">
-          ${exercises.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}${e.bodyPart ? ' / ' + escapeHtml(e.bodyPart) : ''}</option>`).join('')}
-        </select></div>
+        <select id="w-ex" class="input"></select></div>
       <div id="w-pr" class="muted"></div>
       <div id="w-cues"></div>
     </div>
@@ -153,6 +153,36 @@ export async function renderWorkout(el) {
   let rowSteppers = [];
 
   const exerciseName = (id) => exercises.find((e) => e.id === id)?.name || '?';
+
+  const exPartGroups = {};
+  for (const e of exercises) {
+    const cat = categoryKey(e);
+    (exPartGroups[cat] ||= []).push(e);
+  }
+  const exParts = [
+    ...BODY_PARTS.filter((p) => exPartGroups[p]),
+    ...Object.keys(exPartGroups).filter((p) => !BODY_PARTS.includes(p)),
+  ];
+  let currentExPart = exParts[0];
+
+  function renderExPartSeg() {
+    el.querySelector('#w-ex-part-seg').innerHTML = exParts
+      .map((p) => `<button data-p="${escapeHtml(p)}" class="${p === currentExPart ? 'sel' : ''}">${escapeHtml(p)}</button>`).join('');
+    el.querySelectorAll('#w-ex-part-seg button').forEach((b) =>
+      b.addEventListener('click', () => {
+        currentExPart = b.dataset.p;
+        renderExPartSeg();
+        renderExSelect();
+        refreshPR();
+        refreshVolumeBar();
+      }));
+  }
+
+  function renderExSelect() {
+    const list = exPartGroups[currentExPart] || [];
+    el.querySelector('#w-ex').innerHTML = list
+      .map((e) => `<option value="${e.id}">${escapeHtml(e.name)}${e.bodyPart ? ' / ' + escapeHtml(e.bodyPart) : ''}</option>`).join('');
+  }
 
   function defaultSSExerciseIds() {
     const ids = exercises.slice(0, SS_DEFAULT_EX).map((e) => e.id);
@@ -499,6 +529,8 @@ export async function renderWorkout(el) {
     await refreshVolumeBar();
   });
 
+  renderExPartSeg();
+  renderExSelect();
   applyMode('normal');
   refreshPR();
   await renderToday(el, exercises);
