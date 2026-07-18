@@ -47,7 +47,7 @@ test('maxCategoryVolumeExcludingDate returns max daily total excluding a date', 
   assert.equal(all['胸'], 800);
 });
 
-import { categoryKey, maxCategoryVolumeWithDate, VOLUME_START_DATE } from '../js/lib/volume.js';
+import { categoryKey, maxCategoryVolumeWithDate, VOLUME_START_DATE, categoriesWithExercises } from '../js/lib/volume.js';
 
 test('categoryKey uses bodyPart prefix before slash', () => {
   assert.equal(categoryKey({ bodyPart: '胸/上部' }), '胸');
@@ -130,4 +130,18 @@ test('categoryPRProgression with a single point returns that point', () => {
 
 test('categoryPRProgression with empty input returns empty array', () => {
   assert.deepEqual(categoryPRProgression([]), []);
+});
+
+test('categoriesWithExercises orders by bodyParts then leftovers, excludes empty categories', () => {
+  const exercises = [
+    { bodyPart: '腕/上腕二頭筋' },
+    { bodyPart: '胸/上部' },
+    { bodyPart: 'カスタム部位' },
+  ];
+  const bodyParts = ['背中', '胸', '肩', '脚', '腕', 'その他'];
+  assert.deepEqual(categoriesWithExercises(exercises, bodyParts), ['胸', '腕', 'カスタム部位']);
+});
+
+test('categoriesWithExercises returns empty array for no exercises', () => {
+  assert.deepEqual(categoriesWithExercises([], ['胸', '背中']), []);
 });
