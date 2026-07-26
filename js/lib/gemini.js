@@ -17,6 +17,34 @@ export function buildInsightPrompt(stats) {
   ].join('\n');
 }
 
+// 登録種目と部位別の未トレーニング日数から、今日のコース提案プロンプトを生成（純粋関数）
+export function buildCourseSuggestionPrompt(stats) {
+  const exerciseList = (stats.exercises || [])
+    .map((e) => `- ${e.name}（${e.bodyPart || '部位未設定'}）`).join('\n');
+  const gapList = (stats.gaps || [])
+    .map((g) => `- ${g.category}: ${g.days == null ? '未実施' : `${g.days}日前に実施`}`).join('\n');
+  return [
+    'あなたは中・上級トレーニーを指導するパーソナルトレーナーです。',
+    '以下の登録種目一覧の中から3〜6種目を選び、部位のバランスと各部位の直近の実施状況を考慮して、今日行うのに適したトレーニングコースを組んでください。',
+    '登録種目一覧に存在する種目名のみを、他の説明文やコードフェンスを含めずに以下のJSON形式のみで出力してください。',
+    '{"exercises": ["種目名1", "種目名2", ...]}',
+    '',
+    '【登録種目一覧】', exerciseList || '（なし）',
+    '【部位別の直近実施状況】', gapList || '（記録なし）',
+  ].join('\n');
+}
+
+// Gemini応答テキストから提案種目名の配列を抽出する（純粋関数、失敗時は空配列）
+export function parseCourseSuggestion(text) {
+  try {
+    const cleaned = text.replace(/```json|```/g, '').trim();
+    const data = JSON.parse(cleaned);
+    return Array.isArray(data.exercises) ? data.exercises : [];
+  } catch {
+    return [];
+  }
+}
+
 // Gemini を呼び生成テキストを返す。fetchImpl 注入でテスト可能。
 export async function callGemini(prompt, apiKey, { fetchImpl = fetch } = {}) {
   const resp = await fetchImpl(ENDPOINT(apiKey), {
