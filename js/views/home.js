@@ -1,4 +1,4 @@
-import { getAll, get, put, remove } from '../db.js';
+import { getAll, get, put, remove, uid } from '../db.js';
 import { computePRs } from '../lib/calc.js';
 import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
@@ -9,7 +9,9 @@ import { localDateStr } from '../lib/localdate.js';
 import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression, categoriesWithExercises } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
 import { stepPath } from '../lib/chart.js';
-import { lastTrainedDateByCategory, suggestBodyParts } from '../lib/suggest.js';
+import { lastTrainedDateByCategory } from '../lib/suggest.js';
+import { matchExerciseNamesToIds } from '../lib/courses.js';
+import { buildCourseSuggestionPrompt, parseCourseSuggestion, callGemini } from '../lib/gemini.js';
 
 export async function renderHome(el, navigate) {
   const exercises = await getAll('exercises');
@@ -33,15 +35,22 @@ export async function renderHome(el, navigate) {
   const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
   const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
 
+  const courses = await getAll('courses');
   const suggestCategories = categoriesWithExercises(exercises, BODY_PARTS);
   const lastTrained = lastTrainedDateByCategory(sets, exById, wkById);
-  const suggested = suggestBodyParts(suggestCategories, lastTrained, new Date());
-  const suggestCard = suggested.length
+
+  const courseButtons = courses.length
+    ? `<div class="row" style="margin-top:10px">
+        ${courses.map((c) => `<button type="button" class="btn btn-primary" data-select-course="${c.id}">${escapeHtml(c.name)}</button>`).join('')}
+      </div>`
+    : '<p class="muted" style="margin-top:10px">メニュー管理でコースを登録すると、ここから選べます。</p>';
+
+  const suggestCard = exercises.length
     ? `<div class="card">
         <strong>お帰りなさい。今日はどんなトレーニングをしますか？</strong>
-        <div class="row" style="margin-top:10px">
-          ${suggested.map((cat) => `<button type="button" class="btn btn-primary" data-suggest-part="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join('')}
-        </div>
+        ${courseButtons}
+        <button type="button" id="ai-course-btn" class="btn btn-block" style="margin-top:10px">AIが今日のコースを提案</button>
+        <div id="ai-course-out" style="margin-top:10px"></div>
       </div>`
     : '';
 
@@ -87,8 +96,57 @@ export async function renderHome(el, navigate) {
     onSelect: (date) => renderDayDetail(el.querySelector('#home-day'), date, { exercises, nameOf }),
   });
 
-  el.querySelectorAll('[data-suggest-part]').forEach((b) =>
-    b.addEventListener('click', () => navigate('workout', { initialPart: b.dataset.suggestPart })));
+  el.querySelectorAll('[data-select-course]').forEach((b) =>
+    b.addEventListener('click', () => navigate('workout', { initialCourseId: b.dataset.selectCourse })));
+
+  const aiCourseBtn = el.querySelector('#ai-course-btn');
+  if (aiCourseBtn) {
+    aiCourseBtn.addEventListener('click', async () => {
+      const out = el.querySelector('#ai-course-out');
+      const key = localStorage.getItem('gemini_api_key') || '';
+      if (!key) { out.innerHTML = '<p class="muted">設定でGemini APIキーを登録してください。</p>'; return; }
+      out.innerHTML = '<p class="muted">提案中…</p>';
+      try {
+        const gaps = suggestCategories
+          .filter((c) => c !== 'その他')
+          .map((cat) => ({ cat, date: lastTrained[cat] }))
+          .map(({ cat, date }) => ({ category: cat, days: date ? -daysUntil(date) : null }));
+        const prompt = buildCourseSuggestionPrompt({
+          exercises: exercises.map((e) => ({ name: e.name, bodyPart: e.bodyPart })),
+          gaps,
+        });
+        const text = await callGemini(prompt, key, {});
+        const names = parseCourseSuggestion(text);
+        const matchedIds = matchExerciseNamesToIds(names, exercises);
+        if (!matchedIds.length) {
+          out.innerHTML = '<p class="muted">AIの提案を解析できませんでした。もう一度お試しください。</p>';
+          return;
+        }
+        const now = new Date();
+        const defaultName = `AIおすすめ ${now.getMonth() + 1}/${now.getDate()}`;
+        out.innerHTML = `
+          <div class="muted">${matchedIds.map((id) => escapeHtml(nameOf(id))).join('、')}</div>
+          <div class="field" style="margin-top:8px"><label>コース名</label>
+            <input id="ai-course-name" class="input" value="${escapeHtml(defaultName)}" /></div>
+          <div class="row" style="margin-top:8px">
+            <button type="button" id="ai-course-go" class="btn btn-primary">この内容で記録する</button>
+            <button type="button" id="ai-course-save" class="btn">この内容でコース保存</button>
+          </div>
+          <div id="ai-course-save-msg" class="muted" style="margin-top:6px"></div>`;
+        out.querySelector('#ai-course-go').addEventListener('click', () =>
+          navigate('workout', { initialExerciseIds: matchedIds }));
+        out.querySelector('#ai-course-save').addEventListener('click', async () => {
+          const name = out.querySelector('#ai-course-name').value.trim();
+          const msg = out.querySelector('#ai-course-save-msg');
+          if (!name) { msg.textContent = 'コース名を入力してください'; return; }
+          await put('courses', { id: uid(), name, exerciseIds: matchedIds });
+          msg.textContent = '保存しました';
+        });
+      } catch (e) {
+        out.innerHTML = `<p class="muted">エラー: ${escapeHtml(e.message)}</p>`;
+      }
+    });
+  }
 
   el.querySelectorAll('.vol-row').forEach((row) => {
     row.querySelector('.list-item').addEventListener('click', () => {
