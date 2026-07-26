@@ -401,14 +401,9 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   el.querySelector('#w-ex').addEventListener('change', () => { refreshPR(); refreshVolumeBar(); });
 
-  function renderCourseExercises() {
+  function showExerciseButtons(ids) {
     const box = el.querySelector('#w-course-exercises');
-    const courseId = el.querySelector('#w-course').value;
-    const course = courses.find((c) => c.id === courseId);
-    if (!course) { box.innerHTML = ''; return; }
-    const items = course.exerciseIds
-      .map((id) => exercises.find((e) => e.id === id))
-      .filter(Boolean);
+    const items = ids.map((id) => exercises.find((e) => e.id === id)).filter(Boolean);
     box.innerHTML = items
       .map((e) => `<button type="button" class="btn" data-course-ex="${e.id}" style="margin:0 6px 6px 0">${escapeHtml(e.name)}</button>`).join('');
     box.querySelectorAll('[data-course-ex]').forEach((b) =>
@@ -423,6 +418,13 @@ export async function renderWorkout(el, navigate, opts = {}) {
         refreshPR();
         refreshVolumeBar();
       }));
+  }
+
+  function renderCourseExercises() {
+    const courseId = el.querySelector('#w-course').value;
+    const course = courses.find((c) => c.id === courseId);
+    if (!course) { el.querySelector('#w-course-exercises').innerHTML = ''; return; }
+    showExerciseButtons(course.exerciseIds);
   }
   el.querySelector('#w-course').addEventListener('change', renderCourseExercises);
 
@@ -569,6 +571,14 @@ export async function renderWorkout(el, navigate, opts = {}) {
   applyMode('normal');
   refreshPR();
   await renderToday(el, exercises);
+
+  if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
+    el.querySelector('#w-course').value = opts.initialCourseId;
+    renderCourseExercises();
+  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
+    const validIds = opts.initialExerciseIds.filter((id) => exercises.some((e) => e.id === id));
+    if (validIds.length) showExerciseButtons(validIds);
+  }
 }
 
 function bindSeg(el, sel, cb, initial, attr = 'v') {
