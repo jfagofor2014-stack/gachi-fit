@@ -553,7 +553,9 @@ export async function renderWorkout(el, navigate, opts = {}) {
       i++;
     }
     el.querySelector('#w-note').value = '';
-    rowValues = defaultRowValues(DEFAULT_ROWS);
+    rowValues = isDropset
+      ? rowValues.map((rv) => ({ weight: rv.weight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }))
+      : defaultRowValues(DEFAULT_ROWS);
     renderRows();
     const saveBtn = el.querySelector('#w-save');
     saveBtn.textContent = `保存しました（${filled.length}セット）`;
