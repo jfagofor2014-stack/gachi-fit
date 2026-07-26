@@ -52,6 +52,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
   const allSets = await getAll('sets');
   const prs = computePRs(allSets);
   const places = await getAll('places');
+  const courses = await getAll('courses');
   const todayWorkout = (await getAll('workouts')).find((w) => w.date === todayStr());
   const defaultSec = parseInt(localStorage.getItem('default_interval_sec') || '90', 10);
   const intervalChoices = [60, 90, 120, 180];
@@ -78,6 +79,16 @@ export async function renderWorkout(el, navigate, opts = {}) {
           <input id="w-end" type="time" class="input" value="${todayWorkout && todayWorkout.endTime ? todayWorkout.endTime : ''}" /></div>
       </div>
       <div id="w-dur" class="muted">${todayWorkout && todayWorkout.durationSec ? '所要: ' + formatMinutes(todayWorkout.durationSec) : '所要: —'}</div>
+    </div>
+
+    <div class="card">
+      <strong>コース</strong>
+      <div class="field" style="margin-top:8px"><label>今日のコース</label>
+        <select id="w-course" class="input">
+          <option value="">選択なし</option>
+          ${courses.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+        </select></div>
+      <div id="w-course-exercises" style="margin-top:8px"></div>
     </div>
 
     <div class="card" id="w-ex-card">
@@ -389,6 +400,31 @@ export async function renderWorkout(el, navigate, opts = {}) {
   }
 
   el.querySelector('#w-ex').addEventListener('change', () => { refreshPR(); refreshVolumeBar(); });
+
+  function renderCourseExercises() {
+    const box = el.querySelector('#w-course-exercises');
+    const courseId = el.querySelector('#w-course').value;
+    const course = courses.find((c) => c.id === courseId);
+    if (!course) { box.innerHTML = ''; return; }
+    const items = course.exerciseIds
+      .map((id) => exercises.find((e) => e.id === id))
+      .filter(Boolean);
+    box.innerHTML = items
+      .map((e) => `<button type="button" class="btn" data-course-ex="${e.id}" style="margin:0 6px 6px 0">${escapeHtml(e.name)}</button>`).join('');
+    box.querySelectorAll('[data-course-ex]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const exId = b.dataset.courseEx;
+        const ex = exercises.find((e) => e.id === exId);
+        if (!ex) return;
+        currentExPart = categoryKey(ex);
+        renderExPartSeg();
+        renderExSelect();
+        el.querySelector('#w-ex').value = exId;
+        refreshPR();
+        refreshVolumeBar();
+      }));
+  }
+  el.querySelector('#w-course').addEventListener('change', renderCourseExercises);
 
   function applyMode(newMode) {
     syncRowValuesFromSteppers();

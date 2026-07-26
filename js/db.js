@@ -1,6 +1,6 @@
 const DB_NAME = 'gachi-fit';
-const DB_VERSION = 3;
-const STORES = ['exercises', 'workouts', 'sets', 'sensoryLogs', 'photos', 'goals', 'bodyWeights', 'setPatterns', 'places'];
+const DB_VERSION = 4;
+const STORES = ['exercises', 'workouts', 'sets', 'sensoryLogs', 'photos', 'goals', 'bodyWeights', 'setPatterns', 'places', 'courses'];
 
 let dbPromise;
 
