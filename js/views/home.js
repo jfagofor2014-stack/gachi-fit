@@ -2,7 +2,7 @@ import { getAll, get, put, remove, uid } from '../db.js';
 import { computePRs } from '../lib/calc.js';
 import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
-import { escapeHtml, BODY_PARTS } from './exercises.js';
+import { escapeHtml, BODY_PARTS, COURSE_MAX_EX } from './exercises.js';
 import { renderCalendar } from './calendar.js';
 import { openSetEditor } from './set-editor.js';
 import { localDateStr } from '../lib/localdate.js';
@@ -117,7 +117,7 @@ export async function renderHome(el, navigate) {
         });
         const text = await callGemini(prompt, key, {});
         const names = parseCourseSuggestion(text);
-        const matchedIds = matchExerciseNamesToIds(names, exercises);
+        const matchedIds = matchExerciseNamesToIds(names, exercises).slice(0, COURSE_MAX_EX);
         if (!matchedIds.length) {
           out.innerHTML = '<p class="muted">AIの提案を解析できませんでした。もう一度お試しください。</p>';
           return;

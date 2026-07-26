@@ -3,8 +3,8 @@ import { searchPresets } from '../lib/exercisePresets.js';
 import { mostUsedExerciseIds } from '../lib/courses.js';
 
 export const BODY_PARTS = ['背中', '胸', '肩', '脚', '腕', 'その他'];
-const COURSE_MIN_EX = 3;
-const COURSE_MAX_EX = 6;
+export const COURSE_MIN_EX = 3;
+export const COURSE_MAX_EX = 6;
 const COURSE_DEFAULT_EX = 4;
 
 export async function renderExercises(el) {
