@@ -122,7 +122,9 @@ export async function renderExercises(el) {
   });
 
   el.querySelector('#course-autofill').addEventListener('click', () => {
-    const topIds = mostUsedExerciseIds(sets, courseSlots.length);
+    const validExerciseIds = new Set(exercises.map((e) => e.id));
+    const usableSets = sets.filter((s) => validExerciseIds.has(s.exerciseId));
+    const topIds = mostUsedExerciseIds(usableSets, courseSlots.length);
     courseSlots = courseSlots.map((exId, i) => topIds[i] || exId);
     renderCourseSlots();
   });
