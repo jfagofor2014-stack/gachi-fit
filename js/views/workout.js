@@ -2,14 +2,13 @@ import { getAll, get, put, remove, uid } from '../db.js';
 import { estimate1RM, computePRs } from '../lib/calc.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
-import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, categoriesWithExercises, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
 import { escapeHtml } from '../lib/html.js';
-import { BODY_PARTS } from '../lib/constants.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
 import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/interval-bar.js';
+import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 
 const MIN_ROWS = 1;
 const MAX_ROWS = 6;
@@ -63,6 +62,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   el.innerHTML = `
     <h2 class="view-title">記録</h2>
+    ${exerciseHeaderHtml(courses)}
     <div class="card">
       <strong>本日のトレーニング</strong>
       <div class="field" style="margin-top:10px"><label>場所</label>
@@ -80,27 +80,6 @@ export async function renderWorkout(el, navigate, opts = {}) {
       <div class="field mt-2"><label>インターバル秒数</label>
         ${intervalSecsHtml(intervalChoices, defaultSec)}</div>
     </div>
-
-    <div class="card">
-      <strong>コース</strong>
-      <div class="field" style="margin-top:8px"><label>今日のコース</label>
-        <select id="w-course" class="input">
-          <option value="">選択なし</option>
-          ${courses.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
-        </select></div>
-      <div id="w-course-exercises" style="margin-top:8px"></div>
-    </div>
-
-    <div class="card" id="w-ex-card">
-      <div class="field"><label>部位</label>
-        <div class="seg" id="w-ex-part-seg" style="margin-top:8px"></div></div>
-      <div class="field"><label>種目</label>
-        <select id="w-ex" class="input"></select></div>
-      <div id="w-pr" class="muted"></div>
-      <div id="w-cues"></div>
-    </div>
-
-    <div class="card" id="w-volume"></div>
 
     <div class="card">
       <strong>セット入力</strong>
@@ -152,33 +131,6 @@ export async function renderWorkout(el, navigate, opts = {}) {
   let rowSteppers = [];
 
   const exerciseName = (id) => exercises.find((e) => e.id === id)?.name || '?';
-
-  const exPartGroups = {};
-  for (const e of exercises) {
-    const cat = categoryKey(e);
-    (exPartGroups[cat] ||= []).push(e);
-  }
-  const exParts = categoriesWithExercises(exercises, BODY_PARTS);
-  let currentExPart = (opts.initialPart && exParts.includes(opts.initialPart)) ? opts.initialPart : exParts[0];
-
-  function renderExPartSeg() {
-    el.querySelector('#w-ex-part-seg').innerHTML = exParts
-      .map((p) => `<button data-p="${escapeHtml(p)}" class="${p === currentExPart ? 'sel' : ''}">${escapeHtml(p)}</button>`).join('');
-    el.querySelectorAll('#w-ex-part-seg button').forEach((b) =>
-      b.addEventListener('click', () => {
-        currentExPart = b.dataset.p;
-        renderExPartSeg();
-        renderExSelect();
-        refreshPR();
-        refreshVolumeBar();
-      }));
-  }
-
-  function renderExSelect() {
-    const list = exPartGroups[currentExPart] || [];
-    el.querySelector('#w-ex').innerHTML = list
-      .map((e) => `<option value="${e.id}">${escapeHtml(e.name)}${e.bodyPart ? ' / ' + escapeHtml(e.bodyPart) : ''}</option>`).join('');
-  }
 
   function defaultSSExerciseIds() {
     const ids = exercises.slice(0, SS_DEFAULT_EX).map((e) => e.id);
@@ -356,72 +308,11 @@ export async function renderWorkout(el, navigate, opts = {}) {
     renderSSRounds();
   });
 
-  function refreshPR() {
-    const exId = el.querySelector('#w-ex').value;
-    const pr = prs[exId];
-    el.querySelector('#w-pr').innerHTML = pr
-      ? `PR(推定1RM): <span class="pr-badge">${pr.toFixed(1)}kg</span>`
-      : 'PR: <span class="muted">記録なし</span>';
-    const ex = exercises.find((e) => e.id === exId);
-    el.querySelector('#w-cues').innerHTML =
-      (ex?.cuePresets || []).map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('');
-  }
-
-  async function refreshVolumeBar() {
-    const box = el.querySelector('#w-volume');
-    const exId = el.querySelector('#w-ex').value;
-    const ex = exercises.find((e) => e.id === exId);
-    const cat = categoryKey(ex);
-    const sets = await getAll('sets');
-    const workouts = await getAll('workouts');
-    const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
-    const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
-    const today = localDateStr();
-    const todayVol = categoryVolumeForDate(sets, exById, wkById, today)[cat] || 0;
-    const pastMax = maxCategoryVolumeExcludingDate(sets, exById, wkById, today, VOLUME_START_DATE)[cat] || 0;
-    const pct = pastMax > 0 ? Math.min(100, (todayVol / pastMax) * 100) : (todayVol > 0 ? 100 : 0);
-    const beat = todayVol > pastMax && todayVol > 0;
-    box.innerHTML = `
-      <div class="muted">部位「${escapeHtml(cat)}」の本日ボリューム</div>
-      <div class="volbar"><div class="volbar-fill" style="width:${pct}%"></div></div>
-      <div class="muted">本日 ${Math.round(todayVol)} / 過去最高 ${pastMax > 0 ? Math.round(pastMax) : '—'}${beat ? ' <span class="pr-badge">自己ベスト更新！</span>' : ''}</div>`;
-  }
-
-  el.querySelector('#w-ex').addEventListener('change', () => { refreshPR(); refreshVolumeBar(); });
-
-  function showExerciseButtons(ids) {
-    const box = el.querySelector('#w-course-exercises');
-    const items = ids.map((id) => exercises.find((e) => e.id === id)).filter(Boolean);
-    box.innerHTML = items
-      .map((e) => `<button type="button" class="btn" data-course-ex="${e.id}" style="margin:0 6px 6px 0">${escapeHtml(e.name)}</button>`).join('');
-    box.querySelectorAll('[data-course-ex]').forEach((b) =>
-      b.addEventListener('click', () => {
-        const exId = b.dataset.courseEx;
-        const ex = exercises.find((e) => e.id === exId);
-        if (!ex) return;
-        currentExPart = categoryKey(ex);
-        renderExPartSeg();
-        renderExSelect();
-        el.querySelector('#w-ex').value = exId;
-        refreshPR();
-        refreshVolumeBar();
-      }));
-  }
-
-  function renderCourseExercises() {
-    const courseId = el.querySelector('#w-course').value;
-    const course = courses.find((c) => c.id === courseId);
-    if (!course) { el.querySelector('#w-course-exercises').innerHTML = ''; return; }
-    showExerciseButtons(course.exerciseIds);
-  }
-  el.querySelector('#w-course').addEventListener('change', renderCourseExercises);
-
-  function applyMode(newMode) {
+  async function applyMode(newMode) {
     syncRowValuesFromSteppers();
     if (mode === 'superset') syncSSValuesFromSteppers();
     mode = newMode;
-    el.querySelector('#w-ex-card').style.display = mode === 'superset' ? 'none' : 'block';
-    el.querySelector('#w-volume').style.display = mode === 'superset' ? 'none' : 'block';
+    el.querySelector('#w-ex-header').style.display = mode === 'superset' ? 'none' : 'block';
     el.querySelector('#w-normal-block').style.display = mode === 'superset' ? 'none' : 'block';
     el.querySelector('#w-ss-block').style.display = mode === 'superset' ? 'block' : 'none';
     el.querySelector('#w-error').textContent = '';
@@ -430,7 +321,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
       renderSSExercises();
       renderSSRounds();
     } else {
-      refreshVolumeBar();
+      await exPanel.refresh();
     }
   }
   el.querySelector('#w-mode-seg').querySelectorAll('button').forEach((b) =>
@@ -508,7 +399,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
         err.textContent = '補助回数は回数以下にしてください'; return;
       }
     }
-    const exerciseId = el.querySelector('#w-ex').value;
+    const exerciseId = exPanel.currentExerciseId();
     const workout = await patchTodayWorkout();
     const note = el.querySelector('#w-note').value;
     const isDropset = mode === 'dropset';
@@ -534,21 +425,20 @@ export async function renderWorkout(el, navigate, opts = {}) {
     saveBtn.textContent = `保存しました（${filled.length}セット）`;
     setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
     await renderToday(el, exercises);
-    await refreshVolumeBar();
+    await exPanel.refresh();
   });
 
-  renderExPartSeg();
-  renderExSelect();
-  applyMode('normal');
-  refreshPR();
+  const exPanel = createExercisePanel(el, { exercises, courses, prs });
+  await applyMode('normal');
+  await exPanel.refresh();
   await renderToday(el, exercises);
 
   if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
-    el.querySelector('#w-course').value = opts.initialCourseId;
-    renderCourseExercises();
+    exPanel.setCourse(opts.initialCourseId);
+    exPanel.openPicker();
   } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
     const validIds = opts.initialExerciseIds.filter((id) => exercises.some((e) => e.id === id));
-    if (validIds.length) showExerciseButtons(validIds);
+    if (validIds.length) { exPanel.showExerciseButtons(validIds); exPanel.openPicker(); }
   }
 }
 
