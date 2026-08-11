@@ -60,7 +60,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   if (!exercises.length) {
     el.innerHTML = `<h2 class="view-title">記録</h2>
-      <div class="card"><p class="muted">先に「メニュー」で種目を登録してください。</p></div>`;
+      <div class="card"><p class="muted">先に「管理」タブで種目を登録してください。</p></div>`;
     return;
   }
 

@@ -1,33 +1,24 @@
 import { renderHome } from './views/home.js';
 import { renderWorkout } from './views/workout.js';
-import { renderExercises } from './views/exercises.js';
-import { renderHistory } from './views/history.js';
-import { renderInsights } from './views/insights.js';
-import { renderReview } from './views/review.js';
-import { renderSettings } from './views/settings.js';
-import { renderBody } from './views/body.js';
-import { renderMore } from './views/more.js';
+import { renderAnalysis } from './views/analysis.js';
+import { renderManage } from './views/manage.js';
 import { getAll, put, uid } from './db.js';
 import { ensureDefaultSetPatterns } from './lib/seed.js';
 
-const TAB_ROUTES = ['home', 'workout', 'body', 'insights', 'more'];
+const TAB_ROUTES = ['home', 'workout', 'analysis', 'manage'];
 
 const routes = {
   home: renderHome,
   workout: renderWorkout,
-  exercises: renderExercises,
-  history: renderHistory,
-  insights: renderInsights,
-  review: renderReview,
-  settings: renderSettings,
-  body: renderBody,
-  more: renderMore,
+  analysis: renderAnalysis,
+  manage: renderManage,
 };
 
 async function navigate(route, opts) {
   const el = document.getElementById('view');
   document.querySelectorAll('.tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.route === route && TAB_ROUTES.includes(route)));
+  document.body.classList.toggle('has-interval-bar', route === 'workout');
   const render = routes[route] || renderHome;
   await render(el, navigate, opts);
 }

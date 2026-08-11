@@ -44,7 +44,7 @@ export async function renderHome(el, navigate) {
     ? `<div class="row" style="margin-top:10px">
         ${courses.map((c) => `<button type="button" class="btn btn-primary" data-select-course="${c.id}">${escapeHtml(c.name)}</button>`).join('')}
       </div>`
-    : '<p class="muted" style="margin-top:10px">メニュー管理でコースを登録すると、ここから選べます。</p>';
+    : '<p class="muted mt-2">「管理」タブでコースを登録すると、ここから選べます。</p>';
 
   const suggestCard = exercises.length
     ? `<div class="card">

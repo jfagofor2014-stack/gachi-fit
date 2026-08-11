@@ -5,8 +5,8 @@ const ASSETS = [
   'js/lib/calc.js', 'js/lib/chart.js',
   'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js', 'js/lib/duration.js', 'js/lib/calendar.js', 'js/lib/localdate.js', 'js/lib/timerange.js', 'js/lib/volume.js', 'js/lib/obsidian.js', 'js/lib/sound.js', 'js/lib/exercisePresets.js', 'js/lib/groupSets.js', 'js/lib/suggest.js', 'js/lib/courses.js', 'js/lib/html.js', 'js/lib/constants.js',
   'js/views/home.js', 'js/views/workout.js', 'js/views/exercises.js', 'js/views/analysis.js',
-  'js/views/history.js', 'js/views/insights.js', 'js/views/review.js', 'js/views/settings.js',
-  'js/views/body.js', 'js/views/more.js', 'js/views/components.js', 'js/views/set-editor.js', 'js/views/calendar.js',
+  'js/views/history.js', 'js/views/insights.js', 'js/views/settings.js',
+  'js/views/body.js', 'js/views/components.js', 'js/views/set-editor.js', 'js/views/calendar.js',
   'js/views/manage.js', 'js/views/courses.js', 'js/views/places.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
