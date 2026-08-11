@@ -1,16 +1,15 @@
 import { getAll, get, put, remove, uid } from '../db.js';
 import { estimate1RM, computePRs } from '../lib/calc.js';
-import { createTimer, formatTime } from '../timer.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
 import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, categoriesWithExercises, VOLUME_START_DATE } from '../lib/volume.js';
 import { localDateStr } from '../lib/localdate.js';
-import { shouldBeep, shouldFinalBeep, playBeep } from '../lib/sound.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
 import { escapeHtml } from '../lib/html.js';
 import { BODY_PARTS } from '../lib/constants.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
+import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/interval-bar.js';
 
 const MIN_ROWS = 1;
 const MAX_ROWS = 6;
@@ -22,8 +21,6 @@ const SS_DEFAULT_EX = 2;
 const SS_MIN_ROUNDS = 1;
 const SS_MAX_ROUNDS = 6;
 const SS_DEFAULT_ROUNDS = 3;
-
-let intervalTimer;
 
 const todayStr = () => localDateStr();
 
@@ -80,6 +77,8 @@ export async function renderWorkout(el, navigate, opts = {}) {
           <input id="w-end" type="time" class="input" value="${todayWorkout && todayWorkout.endTime ? todayWorkout.endTime : ''}" /></div>
       </div>
       <div id="w-dur" class="muted">${todayWorkout && todayWorkout.durationSec ? '所要: ' + formatMinutes(todayWorkout.durationSec) : '所要: —'}</div>
+      <div class="field mt-2"><label>インターバル秒数</label>
+        ${intervalSecsHtml(intervalChoices, defaultSec)}</div>
     </div>
 
     <div class="card">
@@ -139,27 +138,15 @@ export async function renderWorkout(el, navigate, opts = {}) {
     </div>
 
     <div class="card">
-      <strong>インターバル</strong>
-      <div class="seg" id="w-int-secs" style="margin-top:8px">
-        ${intervalChoices.map((s) => `<button data-s="${s}" class="${s === defaultSec ? 'sel' : ''}">${s}秒</button>`).join('')}
-      </div>
-      <div class="timer-big" id="w-timer" style="display:none">1:30</div>
-      <div class="row" style="margin-top:10px">
-        <button id="w-int-start" class="btn btn-primary">開始</button>
-        <button id="w-int-stop" class="btn">停止</button>
-      </div>
-    </div>
-
-    <div class="card">
       <strong>本日の感想</strong>
       <p class="muted">AI分析の対象になります。</p>
       <textarea id="w-impression" class="input" rows="3" style="resize:vertical">${todayWorkout ? escapeHtml(todayWorkout.note || '') : ''}</textarea>
       <button id="w-impression-save" class="btn btn-block" style="margin-top:8px">感想を保存</button>
     </div>
 
-    <div class="card"><strong>本日のセット</strong><div id="w-today"></div></div>`;
+    <div class="card"><strong>本日のセット</strong><div id="w-today"></div></div>
+    ${intervalBarHtml(defaultSec)}`;
 
-  const state = { interval: defaultSec };
   let mode = 'normal';
   let rowValues = defaultRowValues(DEFAULT_ROWS);
   let rowSteppers = [];
@@ -469,24 +456,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
   el.querySelector('#w-start').addEventListener('change', saveTimeRange);
   el.querySelector('#w-end').addEventListener('change', saveTimeRange);
 
-  // インターバル（独立、残り10秒から毎秒ビープ、0秒で長めの音）
-  bindSeg(el, '#w-int-secs', (v) => (state.interval = Number(v)), defaultSec, 's');
-  intervalTimer = createTimer({
-    onTick: (s) => {
-      el.querySelector('#w-timer').textContent = formatTime(s);
-      if (shouldFinalBeep(s)) playBeep({ frequency: 1200, durationMs: 400 });
-      else if (shouldBeep(s)) playBeep();
-    },
-    onDone: () => (el.querySelector('#w-timer').style.display = 'none'),
-  });
-  el.querySelector('#w-int-start').addEventListener('click', () => {
-    el.querySelector('#w-timer').style.display = 'block';
-    intervalTimer.start(state.interval);
-  });
-  el.querySelector('#w-int-stop').addEventListener('click', () => {
-    intervalTimer.stop();
-    el.querySelector('#w-timer').style.display = 'none';
-  });
+  initIntervalBar(el, defaultSec);
 
   // 感想
   el.querySelector('#w-impression-save').addEventListener('click', async () => {
@@ -580,18 +550,6 @@ export async function renderWorkout(el, navigate, opts = {}) {
     const validIds = opts.initialExerciseIds.filter((id) => exercises.some((e) => e.id === id));
     if (validIds.length) showExerciseButtons(validIds);
   }
-}
-
-function bindSeg(el, sel, cb, initial, attr = 'v') {
-  const wrap = el.querySelector(sel);
-  if (initial !== undefined) cb(initial);
-  wrap.querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => {
-      wrap.querySelectorAll('button').forEach((x) => x.classList.remove('sel'));
-      b.classList.add('sel');
-      const v = b.dataset[attr];
-      cb(isNaN(Number(v)) ? v : Number(v));
-    }));
 }
 
 async function renderToday(el, exercises) {
