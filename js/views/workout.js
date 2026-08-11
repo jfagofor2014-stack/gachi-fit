@@ -57,6 +57,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
     <details class="card fold">
       <summary><strong>本日の感想</strong></summary>
+      <p class="muted mt-2">AI分析の対象になります。</p>
       <textarea id="w-impression" class="input mt-2" rows="3" style="resize:vertical">${todayWorkout ? escapeHtml(todayWorkout.note || '') : ''}</textarea>
       <button id="w-impression-save" class="btn btn-block mt-2">感想を保存</button>
     </details>
