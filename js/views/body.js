@@ -15,8 +15,6 @@ export async function renderBody(el) {
   const wPath = sparklinePath(series, 300, 44);
 
   el.innerHTML = `
-    <h2 class="view-title">ボディ</h2>
-
     <div class="card">
       <strong>体重</strong>
       <div class="row" style="margin-top:8px">

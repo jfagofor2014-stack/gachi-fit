@@ -6,13 +6,11 @@ export async function renderInsights(el) {
   const sets = await getAll('sets');
 
   if (!sets.length) {
-    el.innerHTML = `<h2 class="view-title">インサイト</h2>
-      <div class="card"><p class="muted">まだ記録がありません。</p></div>`;
+    el.innerHTML = `<div class="card"><p class="muted">まだ記録がありません。</p></div>`;
     return;
   }
 
   el.innerHTML = `
-    <h2 class="view-title">インサイト</h2>
     <div class="card">
       <strong>AIインサイト（Gemini）</strong>
       <p class="muted">蓄積データを分析し具体的な改善提案を生成します。</p>

@@ -10,15 +10,14 @@ export async function renderHistory(el) {
   const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
 
   if (!sets.length) {
-    el.innerHTML = `<h2 class="view-title">履歴 / PR</h2>
-      <div class="card"><p class="muted">まだ記録がありません。</p></div>`;
+    el.innerHTML = `<div class="card"><p class="muted">まだ記録がありません。</p></div>`;
     return;
   }
 
   const byEx = {};
   for (const s of sets) (byEx[s.exerciseId] ||= []).push(s);
 
-  el.innerHTML = `<h2 class="view-title">履歴 / PR</h2>` +
+  el.innerHTML =
     Object.entries(byEx).map(([id, list]) => {
       const chrono = [...list].sort((a, b) => a.createdAt - b.createdAt);
       const series = chrono.map((s) => s.estimated1RM);
