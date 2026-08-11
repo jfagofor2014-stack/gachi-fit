@@ -7,7 +7,8 @@ import { categoryVolumeForDate, maxCategoryVolumeExcludingDate, categoryKey, cat
 import { localDateStr } from '../lib/localdate.js';
 import { shouldBeep, shouldFinalBeep, playBeep } from '../lib/sound.js';
 import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
-import { escapeHtml, BODY_PARTS } from './exercises.js';
+import { escapeHtml } from '../lib/html.js';
+import { BODY_PARTS } from '../lib/constants.js';
 import { createStepper } from './components.js';
 import { openSetEditor } from './set-editor.js';
 

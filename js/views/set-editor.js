@@ -1,6 +1,6 @@
 import { get, getAll, put, uid } from '../db.js';
 import { estimate1RM } from '../lib/calc.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml } from '../lib/html.js';
 import { createStepper } from './components.js';
 
 // セット編集モーダルを開く。保存/キャンセルで閉じ、変更時に onDone() を呼ぶ。

@@ -1,7 +1,7 @@
 import { getAll, get, put, remove, uid } from '../db.js';
 import { compressImage } from '../lib/image.js';
 import { sparklinePath } from '../lib/chart.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml } from '../lib/html.js';
 import { localDateStr } from '../lib/localdate.js';
 
 export async function renderBody(el) {

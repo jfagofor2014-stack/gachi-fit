@@ -1,10 +1,9 @@
 import { getAll, put, remove, uid } from '../db.js';
 import { searchPresets } from '../lib/exercisePresets.js';
 import { mostUsedExerciseIds } from '../lib/courses.js';
+import { escapeHtml } from '../lib/html.js';
+import { BODY_PARTS, COURSE_MIN_EX, COURSE_MAX_EX } from '../lib/constants.js';
 
-export const BODY_PARTS = ['背中', '胸', '肩', '脚', '腕', 'その他'];
-export const COURSE_MIN_EX = 3;
-export const COURSE_MAX_EX = 6;
 const COURSE_DEFAULT_EX = 4;
 
 export async function renderExercises(el) {
@@ -213,9 +212,4 @@ function renderList(el, exercises) {
       await remove('exercises', b.dataset.del);
       renderExercises(el);
     }));
-}
-
-export function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

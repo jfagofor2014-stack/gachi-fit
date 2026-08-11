@@ -1,5 +1,5 @@
 import { getAll, get, put, remove } from '../db.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml } from '../lib/html.js';
 import { openSetEditor } from './set-editor.js';
 
 export async function renderReview(el) {

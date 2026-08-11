@@ -1,7 +1,7 @@
 import { getAll } from '../db.js';
 import { computePRs } from '../lib/calc.js';
 import { sparklinePath } from '../lib/chart.js';
-import { escapeHtml } from './exercises.js';
+import { escapeHtml } from '../lib/html.js';
 
 export async function renderHistory(el) {
   const exercises = await getAll('exercises');
