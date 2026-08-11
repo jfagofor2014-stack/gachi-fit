@@ -7,6 +7,7 @@ const ASSETS = [
   'js/views/home.js', 'js/views/workout.js', 'js/views/exercises.js', 'js/views/analysis.js',
   'js/views/history.js', 'js/views/insights.js', 'js/views/review.js', 'js/views/settings.js',
   'js/views/body.js', 'js/views/more.js', 'js/views/components.js', 'js/views/set-editor.js', 'js/views/calendar.js',
+  'js/views/manage.js', 'js/views/courses.js', 'js/views/places.js',
   'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

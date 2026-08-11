@@ -7,8 +7,6 @@ export async function renderSettings(el) {
   const patterns = await getAll('setPatterns');
 
   el.innerHTML = `
-    <h2 class="view-title">設定</h2>
-
     <div class="card">
       <strong>既定インターバル秒数</strong>
       <p class="muted">記録タブのインターバルの初期値。</p>
