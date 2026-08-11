@@ -90,3 +90,42 @@ h2.view-title { font-size: 22px; margin: 4px 0 16px; }
 .vol-row .list-item { cursor: pointer; }
 .vol-breakdown { padding: 4px 0 8px; }
 details > summary { cursor: pointer; list-style: revert; }
+
+/* --- 余白ユーティリティ --- */
+.mt-1 { margin-top: 6px; }
+.mt-2 { margin-top: 10px; }
+.mt-3 { margin-top: 14px; }
+.btn-sm { min-height: 40px; padding: 0 12px; }
+
+/* --- サブタブ（分析・管理） --- */
+.subseg { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.subseg button { flex: 1 0 auto; min-height: 44px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid #2c2c2c; background: var(--surface-2); color: var(--text);
+  font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.subseg button.sel { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+
+/* --- 折りたたみカード --- */
+.fold > summary { list-style: none; display: flex; justify-content: space-between;
+  align-items: center; min-height: 32px; cursor: pointer; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: '▸'; color: var(--muted); font-size: 14px; }
+.fold[open] > summary::after { content: '▾'; }
+
+/* --- 記録タブ：上部固定の種目ヘッダー --- */
+.ex-header { position: sticky; top: 0; z-index: 20; background: #141400;
+  border: 1px solid var(--accent); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.ex-header-main { display: flex; justify-content: space-between; align-items: center;
+  min-height: 32px; cursor: pointer; gap: 10px; }
+.ex-header-name { font-weight: 800; font-size: 17px; }
+.ex-header-stats { display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; gap: 10px; }
+.ex-picker { border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
+
+/* --- 記録タブ：下部固定インターバルバー --- */
+.interval-bar { position: fixed; left: 12px; right: 12px;
+  bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 30;
+  background: #0d0d0d; border: 1px solid #333; border-radius: 14px;
+  padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.interval-time { font-size: 22px; font-weight: 800; color: var(--accent);
+  font-variant-numeric: tabular-nums; min-width: 62px; }
+.interval-btn { flex: 1; min-height: 44px; font-size: 14px; padding: 0 10px; }
+body.has-interval-bar { padding-bottom: 148px; }
