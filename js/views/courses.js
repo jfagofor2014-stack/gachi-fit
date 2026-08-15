@@ -29,6 +29,8 @@ export async function renderCourses(el) {
     el.querySelector('#course-slots').innerHTML = '<p class="muted">先に種目を登録してください。</p>';
     el.querySelector('#course-save').disabled = true;
     el.querySelector('#course-autofill').disabled = true;
+    el.querySelector('#course-slot-add').disabled = true;
+    el.querySelector('#course-slot-remove').disabled = true;
     return;
   }
 

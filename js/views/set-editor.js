@@ -11,7 +11,7 @@ export async function openSetEditor(setId, onDone) {
 
   const modal = document.createElement('div');
   modal.className = 'card';
-  modal.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;bottom:12px;overflow:auto;z-index:10;background:var(--surface)';
+  modal.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;bottom:12px;overflow:auto;z-index:var(--z-modal);background:var(--surface)';
   modal.innerHTML = `
     <h2 class="view-title">セット編集</h2>
     <div class="field"><label>重量(kg)</label><div id="e-weight"></div></div>

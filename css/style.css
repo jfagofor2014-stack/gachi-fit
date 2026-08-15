@@ -7,6 +7,9 @@
   --accent: #ccff00;
   --danger: #ff5252;
   --tap: 56px;
+  --z-sticky: 20;
+  --z-fixed: 30;
+  --z-modal: 50;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text);
@@ -110,7 +113,7 @@ details > summary { cursor: pointer; list-style: revert; }
 .fold[open] > summary::after { content: '▾'; }
 
 /* --- 記録タブ：上部固定の種目ヘッダー --- */
-.ex-header { position: sticky; top: 0; z-index: 20; background: #141400;
+.ex-header { position: sticky; top: 0; z-index: var(--z-sticky); background: #141400;
   border: 1px solid var(--accent); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
 .ex-header-main { display: flex; justify-content: space-between; align-items: center;
   min-height: 32px; cursor: pointer; gap: 10px; }
@@ -120,10 +123,10 @@ details > summary { cursor: pointer; list-style: revert; }
 
 /* --- 記録タブ：下部固定インターバルバー --- */
 .interval-bar { position: fixed; left: 12px; right: 12px;
-  bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 30;
+  bottom: calc(68px + env(safe-area-inset-bottom)); z-index: var(--z-fixed);
   background: #0d0d0d; border: 1px solid #333; border-radius: 14px;
   padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
 .interval-time { font-size: 22px; font-weight: 800; color: var(--accent);
   font-variant-numeric: tabular-nums; min-width: 62px; }
 .interval-btn { flex: 1; min-height: 44px; font-size: 14px; padding: 0 10px; }
-body.has-interval-bar { padding-bottom: 148px; }
+body.has-interval-bar { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }

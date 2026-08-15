@@ -1,4 +1,4 @@
-import { getAll, get, put, remove, uid } from '../db.js';
+import { getAll, put, remove, uid } from '../db.js';
 import { estimate1RM, computePRs } from '../lib/calc.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
