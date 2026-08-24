@@ -3,7 +3,7 @@ const ASSETS = [
   '.', 'index.html', 'css/style.css',
   'js/app.js', 'js/db.js', 'js/timer.js',
   'js/lib/calc.js', 'js/lib/chart.js',
-  'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js', 'js/lib/duration.js', 'js/lib/calendar.js', 'js/lib/localdate.js', 'js/lib/timerange.js', 'js/lib/volume.js', 'js/lib/obsidian.js', 'js/lib/sound.js', 'js/lib/exercisePresets.js', 'js/lib/groupSets.js', 'js/lib/suggest.js', 'js/lib/courses.js', 'js/lib/html.js', 'js/lib/constants.js',
+  'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js', 'js/lib/duration.js', 'js/lib/calendar.js', 'js/lib/localdate.js', 'js/lib/timerange.js', 'js/lib/volume.js', 'js/lib/obsidian.js', 'js/lib/sound.js', 'js/lib/exercisePresets.js', 'js/lib/groupSets.js', 'js/lib/suggest.js', 'js/lib/courses.js', 'js/lib/html.js', 'js/lib/constants.js', 'js/lib/plans.js', 'js/lib/crew.js', 'js/lib/firebase-config.js',
   'js/views/home.js', 'js/views/workout.js', 'js/views/workout/interval-bar.js', 'js/views/workout/exercise-panel.js', 'js/views/workout/set-entry.js', 'js/views/exercises.js', 'js/views/analysis.js',
   'js/views/history.js', 'js/views/insights.js', 'js/views/settings.js',
   'js/views/body.js', 'js/views/components.js', 'js/views/set-editor.js', 'js/views/calendar.js',

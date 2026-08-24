@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function members() {
+      return [
+        'jfagofor2014@gmail.com'
+      ];
+    }
+    function isMember() {
+      return request.auth != null && request.auth.token.email in members();
+    }
+    match /crews/main/plans/{planId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.ownerEmail == request.auth.token.email;
+      allow update, delete: if isMember()
+        && resource.data.ownerEmail == request.auth.token.email;
+    }
+  }
+}
