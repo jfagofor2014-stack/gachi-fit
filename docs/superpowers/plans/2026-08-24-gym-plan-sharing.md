@@ -507,11 +507,15 @@ import { openPlanEditor } from './plan-editor.js';
 
 - [ ] **Step 3: カードを描画する処理を追加**
 
-`renderHome` はタブを開くたびに呼ばれるため、購読をモジュールレベルで保持し、再描画のたびに前回ぶんを解除する。解除しないと、ホームに戻るたびに認証リスナーが増え続け、破棄済みDOMを掴んだまま蓄積する。
+`renderHome` はタブを開くたびに呼ばれるため、購読をモジュールレベルで保持し、再描画のたびに前回ぶんを解除する。解除しないと、ホームに戻るたびに認証リスナーが増え続け、破棄済みDOMを掴んだまま蓄積する。さらに `renderHome` は `await` を含むため再入し得る（`app.js` のタブハンドラが `navigate` を await しない）。解除ガードは `await watchAuth(...)` を跨いだ check-then-act になるので、世代カウンタで「自分がもう最新ではない」ことを検出し、古くなっていたら取得した購読解除関数をその場で呼んで捨てる必要がある。
 
 `js/views/home.js` の import 群の直後（`export async function renderHome` の前）に次を追加する:
 
 ```js
+// renderHome は再入し得る（app.js のタブハンドラが navigate を await しない）ため、
+// 世代カウンタで古い呼び出しの購読を確実に破棄する
+let crewGen = 0;
+let crewPlansGen = 0;
 let unsubCrewAuth = null;
 let unsubCrewPlans = null;
 ```
@@ -520,14 +524,24 @@ let unsubCrewPlans = null;
 
 ```js
   // みんなの予定（Firebase 未設定・未ログイン・SDK読み込み失敗時は何も描画しない）
+  const gen = ++crewGen;
   if (unsubCrewAuth) { unsubCrewAuth(); unsubCrewAuth = null; }
   if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
   const crewBox = el.querySelector('#crew-card');
-  unsubCrewAuth = await watchAuth(async (user) => {
+  const unsubAuth = await watchAuth(async (user) => {
+    if (gen !== crewGen) return;
+    const pgen = ++crewPlansGen;
     if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
     if (!user) { crewBox.innerHTML = ''; return; }
-    unsubCrewPlans = await watchPlans((plans) => renderCrewCard(crewBox, plans, user));
+    const unsubPlans = await watchPlans((plans) => {
+      if (gen !== crewGen || pgen !== crewPlansGen) return;
+      renderCrewCard(crewBox, plans, user);
+    });
+    if (gen !== crewGen || pgen !== crewPlansGen) { unsubPlans(); return; }
+    unsubCrewPlans = unsubPlans;
   });
+  if (gen !== crewGen) { unsubAuth(); return; }
+  unsubCrewAuth = unsubAuth;
 ```
 
 - [ ] **Step 4: `renderCrewCard` を追加**

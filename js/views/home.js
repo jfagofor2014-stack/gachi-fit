@@ -17,6 +17,10 @@ import { upcomingPlans, groupPlansByDate, canEditPlan } from '../lib/plans.js';
 import { watchAuth, watchPlans } from '../lib/crew.js';
 import { openPlanEditor } from './plan-editor.js';
 
+// renderHome は再入し得る（app.js のタブハンドラが navigate を await しない）ため、
+// 世代カウンタで古い呼び出しの購読を確実に破棄する
+let crewGen = 0;
+let crewPlansGen = 0;
 let unsubCrewAuth = null;
 let unsubCrewPlans = null;
 
@@ -190,14 +194,24 @@ export async function renderHome(el, navigate) {
   });
 
   // みんなの予定（Firebase 未設定・未ログイン・SDK読み込み失敗時は何も描画しない）
+  const gen = ++crewGen;
   if (unsubCrewAuth) { unsubCrewAuth(); unsubCrewAuth = null; }
   if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
   const crewBox = el.querySelector('#crew-card');
-  unsubCrewAuth = await watchAuth(async (user) => {
+  const unsubAuth = await watchAuth(async (user) => {
+    if (gen !== crewGen) return;
+    const pgen = ++crewPlansGen;
     if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
     if (!user) { crewBox.innerHTML = ''; return; }
-    unsubCrewPlans = await watchPlans((plans) => renderCrewCard(crewBox, plans, user));
+    const unsubPlans = await watchPlans((plans) => {
+      if (gen !== crewGen || pgen !== crewPlansGen) return;
+      renderCrewCard(crewBox, plans, user);
+    });
+    if (gen !== crewGen || pgen !== crewPlansGen) { unsubPlans(); return; }
+    unsubCrewPlans = unsubPlans;
   });
+  if (gen !== crewGen) { unsubAuth(); return; }
+  unsubCrewAuth = unsubAuth;
 }
 
 async function renderDayDetail(box, date, { exercises, nameOf }) {
