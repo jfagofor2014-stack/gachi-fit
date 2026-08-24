@@ -3,6 +3,11 @@ import { localDateStr } from '../lib/localdate.js';
 import { escapeHtml } from '../lib/html.js';
 import { isCrewConfigured, watchAuth, signIn, signOutCrew } from '../lib/crew.js';
 
+// 管理タブのセグメント切替で renderSettings が呼び直されるため、
+// 世代カウンタで古い購読を確実に破棄する
+let settingsCrewGen = 0;
+let unsubSettingsAuth = null;
+
 export async function renderSettings(el) {
   const key = localStorage.getItem('gemini_api_key') || '';
   const goal = (await get('goals', 'main')) || { id: 'main', competitionDate: '', targetWeight: '' };
@@ -146,22 +151,42 @@ export async function renderSettings(el) {
     fileInput.value = '';
   });
 
+  const gen = ++settingsCrewGen;
+  if (unsubSettingsAuth) { unsubSettingsAuth(); unsubSettingsAuth = null; }
   const crewBox = el.querySelector('#s-crew');
   if (!isCrewConfigured()) {
     crewBox.innerHTML = '<p class="muted">共有機能は未設定です。</p>';
-  } else {
-    watchAuth((user) => {
-      crewBox.innerHTML = user
-        ? `<p class="muted">${escapeHtml(user.displayName)}（${escapeHtml(user.email)}）でサインイン中</p>
-           <button id="s-signout" class="btn btn-block mt-2">サインアウト</button>`
-        : '<button id="s-signin" class="btn btn-primary btn-block mt-2">Googleでサインイン</button>';
-      const inBtn = crewBox.querySelector('#s-signin');
-      if (inBtn) inBtn.addEventListener('click', async () => {
-        try { await signIn(); }
-        catch (e) { crewBox.innerHTML = `<p class="error">サインインできませんでした: ${escapeHtml(e.message)}</p>`; }
-      });
-      const outBtn = crewBox.querySelector('#s-signout');
-      if (outBtn) outBtn.addEventListener('click', () => signOutCrew());
+    return;
+  }
+
+  // エラーはボタンを消さずに下へ添える（その場で再試行できるようにする）
+  function renderCrew(user, errorMsg) {
+    crewBox.innerHTML = user
+      ? `<p class="muted">${escapeHtml(user.displayName)}（${escapeHtml(user.email)}）でサインイン中</p>
+         <button id="s-signout" class="btn btn-block mt-2">サインアウト</button>`
+      : '<button id="s-signin" class="btn btn-primary btn-block mt-2">Googleでサインイン</button>';
+    if (errorMsg) {
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = errorMsg;
+      crewBox.appendChild(p);
+    }
+    const inBtn = crewBox.querySelector('#s-signin');
+    if (inBtn) inBtn.addEventListener('click', async () => {
+      try { await signIn(); }
+      catch (e) { renderCrew(null, 'サインインできませんでした: ' + e.message); }
+    });
+    const outBtn = crewBox.querySelector('#s-signout');
+    if (outBtn) outBtn.addEventListener('click', async () => {
+      try { await signOutCrew(); }
+      catch (e) { renderCrew(user, 'サインアウトできませんでした: ' + e.message); }
     });
   }
+
+  const unsubAuth = await watchAuth((user) => {
+    if (gen !== settingsCrewGen) return;
+    renderCrew(user, '');
+  });
+  if (gen !== settingsCrewGen) { unsubAuth(); return; }
+  unsubSettingsAuth = unsubAuth;
 }

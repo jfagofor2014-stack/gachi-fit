@@ -641,13 +641,22 @@ git commit -m "feat: show crew gym plans on the home screen"
 - Consumes: `isCrewConfigured` / `watchAuth` / `signIn` / `signOutCrew`（`js/lib/crew.js`、Task 2）、`escapeHtml`（`js/lib/html.js`）
 - Produces: なし
 
-- [ ] **Step 1: import を追加**
+- [ ] **Step 1: import とモジュール変数を追加**
 
 `js/views/settings.js` の先頭に次の2行を追加する:
 
 ```js
 import { escapeHtml } from '../lib/html.js';
 import { isCrewConfigured, watchAuth, signIn, signOutCrew } from '../lib/crew.js';
+```
+
+続けて、import 群の直後・`export async function renderSettings` の前に、世代カウンタと購読解除関数を保持するモジュール変数を追加する:
+
+```js
+// 管理タブのセグメント切替で renderSettings が呼び直されるため、
+// 世代カウンタで古い購読を確実に破棄する
+let settingsCrewGen = 0;
+let unsubSettingsAuth = null;
 ```
 
 - [ ] **Step 2: カードを追加**
@@ -664,27 +673,47 @@ import { isCrewConfigured, watchAuth, signIn, signOutCrew } from '../lib/crew.js
 
 - [ ] **Step 3: 結線処理を追加**
 
-`renderSettings` 関数の末尾（関数の閉じ括弧の直前）に次を追加する:
+`renderSettings` 関数の末尾（関数の閉じ括弧の直前）に次を追加する。管理タブのセグメント切替のたびに `renderSettings` が同じ要素に対して呼び直されるため、世代カウンタで古い `watchAuth` 購読を破棄してから新しく購読する必要がある。エラーはボタンを消さずに `<p class="error">` として下に添えることで、その場でサインインを再試行できるようにする:
 
 ```js
+  const gen = ++settingsCrewGen;
+  if (unsubSettingsAuth) { unsubSettingsAuth(); unsubSettingsAuth = null; }
   const crewBox = el.querySelector('#s-crew');
   if (!isCrewConfigured()) {
     crewBox.innerHTML = '<p class="muted">共有機能は未設定です。</p>';
-  } else {
-    watchAuth((user) => {
-      crewBox.innerHTML = user
-        ? `<p class="muted">${escapeHtml(user.displayName)}（${escapeHtml(user.email)}）でサインイン中</p>
-           <button id="s-signout" class="btn btn-block mt-2">サインアウト</button>`
-        : '<button id="s-signin" class="btn btn-primary btn-block mt-2">Googleでサインイン</button>';
-      const inBtn = crewBox.querySelector('#s-signin');
-      if (inBtn) inBtn.addEventListener('click', async () => {
-        try { await signIn(); }
-        catch (e) { crewBox.innerHTML = `<p class="error">サインインできませんでした: ${escapeHtml(e.message)}</p>`; }
-      });
-      const outBtn = crewBox.querySelector('#s-signout');
-      if (outBtn) outBtn.addEventListener('click', () => signOutCrew());
+    return;
+  }
+
+  // エラーはボタンを消さずに下へ添える（その場で再試行できるようにする）
+  function renderCrew(user, errorMsg) {
+    crewBox.innerHTML = user
+      ? `<p class="muted">${escapeHtml(user.displayName)}（${escapeHtml(user.email)}）でサインイン中</p>
+         <button id="s-signout" class="btn btn-block mt-2">サインアウト</button>`
+      : '<button id="s-signin" class="btn btn-primary btn-block mt-2">Googleでサインイン</button>';
+    if (errorMsg) {
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = errorMsg;
+      crewBox.appendChild(p);
+    }
+    const inBtn = crewBox.querySelector('#s-signin');
+    if (inBtn) inBtn.addEventListener('click', async () => {
+      try { await signIn(); }
+      catch (e) { renderCrew(null, 'サインインできませんでした: ' + e.message); }
+    });
+    const outBtn = crewBox.querySelector('#s-signout');
+    if (outBtn) outBtn.addEventListener('click', async () => {
+      try { await signOutCrew(); }
+      catch (e) { renderCrew(user, 'サインアウトできませんでした: ' + e.message); }
     });
   }
+
+  const unsubAuth = await watchAuth((user) => {
+    if (gen !== settingsCrewGen) return;
+    renderCrew(user, '');
+  });
+  if (gen !== settingsCrewGen) { unsubAuth(); return; }
+  unsubSettingsAuth = unsubAuth;
 ```
 
 - [ ] **Step 4: テストとブラウザで確認**
