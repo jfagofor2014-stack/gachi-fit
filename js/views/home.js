@@ -13,6 +13,12 @@ import { stepPath } from '../lib/chart.js';
 import { lastTrainedDateByCategory } from '../lib/suggest.js';
 import { matchExerciseNamesToIds } from '../lib/courses.js';
 import { buildCourseSuggestionPrompt, parseCourseSuggestion, callGemini } from '../lib/gemini.js';
+import { upcomingPlans, groupPlansByDate, canEditPlan } from '../lib/plans.js';
+import { watchAuth, watchPlans } from '../lib/crew.js';
+import { openPlanEditor } from './plan-editor.js';
+
+let unsubCrewAuth = null;
+let unsubCrewPlans = null;
 
 export async function renderHome(el, navigate) {
   const exercises = await getAll('exercises');
@@ -74,6 +80,7 @@ export async function renderHome(el, navigate) {
   el.innerHTML = `
     <h2 class="view-title">ホーム</h2>
     ${suggestCard}
+    <div id="crew-card"></div>
     <div class="card">
       <strong>トレーニングカレンダー</strong>
       <div id="home-cal" style="margin-top:10px"></div>
@@ -181,6 +188,16 @@ export async function renderHome(el, navigate) {
       bd.style.display = 'block';
     });
   });
+
+  // みんなの予定（Firebase 未設定・未ログイン・SDK読み込み失敗時は何も描画しない）
+  if (unsubCrewAuth) { unsubCrewAuth(); unsubCrewAuth = null; }
+  if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
+  const crewBox = el.querySelector('#crew-card');
+  unsubCrewAuth = await watchAuth(async (user) => {
+    if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
+    if (!user) { crewBox.innerHTML = ''; return; }
+    unsubCrewPlans = await watchPlans((plans) => renderCrewCard(crewBox, plans, user));
+  });
 }
 
 async function renderDayDetail(box, date, { exercises, nameOf }) {
@@ -277,4 +294,47 @@ function buildDayData(date, workout, sets, exercises, placeName, logs) {
     volume,
     exercises: exercisesData,
   };
+}
+
+const CREW_DAYS = 7;
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+function formatPlanDate(dateStr) {
+  const [, m, d] = dateStr.split('-');
+  const wd = WEEKDAYS[new Date(dateStr + 'T00:00:00').getDay()];
+  return `${Number(m)}/${Number(d)} (${wd})`;
+}
+
+function renderCrewCard(box, plans, user) {
+  const groups = groupPlansByDate(upcomingPlans(plans, localDateStr(), CREW_DAYS));
+  const body = groups.length
+    ? groups.map((g) => `
+        <div class="mt-2"><strong>${escapeHtml(formatPlanDate(g.date))}</strong></div>
+        ${g.plans.map((p) => `
+          <div class="list-item">
+            <span>${escapeHtml(p.startTime)}　${escapeHtml(p.placeName)}
+              <br><span class="muted" style="font-size:12px">${escapeHtml(p.ownerName)}${p.note ? '｜' + escapeHtml(p.note) : ''}</span></span>
+            ${canEditPlan(p, user.email)
+              ? `<span><button class="btn btn-edit btn-sm" data-plan-edit="${escapeHtml(p.id)}">編集</button></span>`
+              : ''}
+          </div>`).join('')}`).join('')
+    : '<p class="muted mt-2">まだ予定がありません。</p>';
+
+  box.innerHTML = `
+    <div class="card">
+      <div class="list-item" style="border:none;padding:0">
+        <strong>みんなの予定</strong>
+        <button type="button" id="crew-add" class="btn btn-sm">＋ 予定を追加</button>
+      </div>
+      ${body}
+    </div>`;
+
+  const reload = () => {};
+  box.querySelector('#crew-add').addEventListener('click', () =>
+    openPlanEditor(null, user, reload));
+  box.querySelectorAll('[data-plan-edit]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const plan = plans.find((p) => p.id === b.dataset.planEdit);
+      if (plan) openPlanEditor(plan, user, reload);
+    }));
 }
