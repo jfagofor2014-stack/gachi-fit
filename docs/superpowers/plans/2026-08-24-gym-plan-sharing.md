@@ -320,7 +320,11 @@ service cloud.firestore {
       allow read: if isMember();
       allow create: if isMember()
         && request.resource.data.ownerEmail == request.auth.token.email;
-      allow update, delete: if isMember()
+      // 更新は自分の予定のみ。あわせて ownerEmail の付け替え（所有権の移動）を禁じる
+      allow update: if isMember()
+        && resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.ownerEmail == resource.data.ownerEmail;
+      allow delete: if isMember()
         && resource.data.ownerEmail == request.auth.token.email;
     }
   }

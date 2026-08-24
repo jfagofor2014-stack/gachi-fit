@@ -79,7 +79,11 @@ service cloud.firestore {
       allow read: if isMember();
       allow create: if isMember()
         && request.resource.data.ownerEmail == request.auth.token.email;
-      allow update, delete: if isMember()
+      // 更新は自分の予定のみ。あわせて ownerEmail の付け替え（所有権の移動）を禁じる
+      allow update: if isMember()
+        && resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.ownerEmail == resource.data.ownerEmail;
+      allow delete: if isMember()
         && resource.data.ownerEmail == request.auth.token.email;
     }
   }
@@ -90,7 +94,7 @@ service cloud.firestore {
 
 - 読み取りは許可リストのメンバー全員
 - 作成は自分自身を `ownerEmail` とするドキュメントのみ
-- 更新・削除は自分が作成したドキュメントのみ（他人の予定を書き換え・削除できない）
+- 更新・削除は自分が作成したドキュメントのみ（他人の予定を書き換え・削除できない）。更新時は `ownerEmail` の変更も禁じ、自分の予定を他人名義に付け替えられないようにする
 - メンバー追加は許可リストに Gmail を1行追記する運用。招待導線は後続サイクル（E）
 
 ## ③ データモデル（C）
