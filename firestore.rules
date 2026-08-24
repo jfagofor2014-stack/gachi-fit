@@ -7,7 +7,9 @@ service cloud.firestore {
       ];
     }
     function isMember() {
-      return request.auth != null && request.auth.token.email in members();
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in members();
     }
     match /crews/main/plans/{planId} {
       allow read: if isMember();

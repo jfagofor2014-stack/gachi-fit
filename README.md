@@ -36,6 +36,20 @@ python3 -m http.server 8765   # http://localhost:8765 で起動
 [Google AI Studio](https://aistudio.google.com/apikey) でGemini APIキーを取得し、
 アプリの「その他 → 設定」で登録する。
 
+## 共有機能を有効にする
+「みんなの予定」（ジム予定の共有）は Firebase を使う。未設定の間はこの機能全体が休眠し、
+他の機能には影響しない。有効にするには以下の手順を行う。
+
+1. [Firebase コンソール](https://console.firebase.google.com/)で新規プロジェクトを作成する（ShibaCare とは別プロジェクトにする）。
+2. **Firestore は「本番モード」で作成する。** テストモードは30日間だれでも読み書きできる状態になる。このリポジトリはルールを自動デプロイしないため、最初から本番モードで作る。
+3. `firestore.rules` の内容をコンソールの Firestore ルール画面に貼って公開する。**設定値（`js/lib/firebase-config.js`）を入れる前に、ルールを先に公開すること。**無防備な窓を作らないため。
+4. Authentication で **Google プロバイダのみ**を有効にする。他のプロバイダを有効にすると、ルール側で `email_verified` を要求していても攻撃対象が広がる。
+5. Storage と Realtime Database は**有効化しない**。このアプリはどちらも使わない。有効化するとデフォルトルールが署名済みユーザー全員に開いた状態になる。
+6. 承認済みドメインに `jfagofor2014-stack.github.io` と `localhost` を追加する。
+7. ウェブアプリを登録して firebaseConfig を取得し、`js/lib/firebase-config.js` の `'REPLACE_ME'` を実際の値に置き換えてコミット・push する。
+8. メンバーを増やすときは `firestore.rules` の `members()` 配列に Gmail アドレスを1行追記し、コンソールで再公開する。
+9. 動作確認は**インストール済みの PWA からも**行うこと。`display: standalone` ではポップアップ方式の OAuth が不安定なことがある。
+
 ## 構成
 - `js/lib/calc.js` 純粋ロジック / `js/db.js` IndexedDB / `js/timer.js` タイマー
 - `js/views/*` 各画面 / `js/app.js` ルーティング

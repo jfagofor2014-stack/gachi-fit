@@ -45,6 +45,7 @@ export async function openPlanEditor(plan, user, onDone) {
 
   modal.querySelector('#p-save').addEventListener('click', async () => {
     const err = modal.querySelector('#p-error');
+    const btn = modal.querySelector('#p-save');
     const date = modal.querySelector('#p-date').value;
     const startTime = modal.querySelector('#p-time').value;
     const placeName = modal.querySelector('#p-place').value.trim();
@@ -52,6 +53,7 @@ export async function openPlanEditor(plan, user, onDone) {
       err.textContent = '日付・時刻・ジム名を入力してください'; return;
     }
     err.textContent = '';
+    btn.disabled = true;
     try {
       await savePlan({
         id: plan ? plan.id : undefined,
@@ -64,6 +66,7 @@ export async function openPlanEditor(plan, user, onDone) {
       onDone();
     } catch (e) {
       err.textContent = '保存できませんでした: ' + e.message;
+      btn.disabled = false;
     }
   });
 
@@ -71,12 +74,14 @@ export async function openPlanEditor(plan, user, onDone) {
   if (delBtn) {
     delBtn.addEventListener('click', async () => {
       const err = modal.querySelector('#p-error');
+      delBtn.disabled = true;
       try {
         await deletePlan(plan.id);
         close();
         onDone();
       } catch (e) {
         err.textContent = '削除できませんでした: ' + e.message;
+        delBtn.disabled = false;
       }
     });
   }

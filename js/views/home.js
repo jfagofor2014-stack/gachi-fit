@@ -203,9 +203,9 @@ export async function renderHome(el, navigate) {
     const pgen = ++crewPlansGen;
     if (unsubCrewPlans) { unsubCrewPlans(); unsubCrewPlans = null; }
     if (!user) { crewBox.innerHTML = ''; return; }
-    const unsubPlans = await watchPlans((plans) => {
+    const unsubPlans = await watchPlans((plans, err) => {
       if (gen !== crewGen || pgen !== crewPlansGen) return;
-      renderCrewCard(crewBox, plans, user);
+      renderCrewCard(crewBox, plans, user, err);
     });
     if (gen !== crewGen || pgen !== crewPlansGen) { unsubPlans(); return; }
     unsubCrewPlans = unsubPlans;
@@ -319,7 +319,15 @@ function formatPlanDate(dateStr) {
   return `${Number(m)}/${Number(d)} (${wd})`;
 }
 
-function renderCrewCard(box, plans, user) {
+function renderCrewCard(box, plans, user, err) {
+  if (err) {
+    const msg = err.code === 'permission-denied'
+      ? 'このアカウントはメンバーに登録されていません。'
+      : '予定を取得できませんでした。';
+    box.innerHTML = `<div class="card"><strong>みんなの予定</strong>
+      <p class="muted mt-2">${escapeHtml(msg)}</p></div>`;
+    return;
+  }
   const groups = groupPlansByDate(upcomingPlans(plans, localDateStr(), CREW_DAYS));
   const body = groups.length
     ? groups.map((g) => `

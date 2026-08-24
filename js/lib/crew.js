@@ -1,40 +1,41 @@
 import { firebaseConfig } from './firebase-config.js';
+import { localDateStr } from './localdate.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/11.0.2';
 const CREW_PATH = ['crews', 'main', 'plans'];
 
-let ctx = null;
-let initTried = false;
+let initPromise = null;
 
 // 設定値がプレースホルダのままなら未設定とみなす
 export function isCrewConfigured() {
   return Object.values(firebaseConfig).every((v) => v && v !== 'REPLACE_ME');
 }
 
-// SDK を動的 import して初期化する。未設定・読み込み失敗時は null を返す
-export async function initCrew() {
-  if (ctx) return ctx;
-  if (initTried) return null;
-  initTried = true;
+async function doInit() {
   if (!isCrewConfigured()) return null;
+  const [appMod, authMod, fsMod] = await Promise.all([
+    import(`${SDK}/firebase-app.js`),
+    import(`${SDK}/firebase-auth.js`),
+    import(`${SDK}/firebase-firestore.js`),
+  ]);
+  const app = appMod.initializeApp(firebaseConfig);
+  const auth = authMod.getAuth(app);
+  let db;
   try {
-    const [appMod, authMod, fsMod] = await Promise.all([
-      import(`${SDK}/firebase-app.js`),
-      import(`${SDK}/firebase-auth.js`),
-      import(`${SDK}/firebase-firestore.js`),
-    ]);
-    const app = appMod.initializeApp(firebaseConfig);
-    let db;
-    try {
-      db = fsMod.initializeFirestore(app, { localCache: fsMod.persistentLocalCache({}) });
-    } catch {
-      db = fsMod.getFirestore(app);
-    }
-    ctx = { auth: authMod.getAuth(app), db, authMod, fsMod };
-    return ctx;
+    db = fsMod.initializeFirestore(app, { localCache: fsMod.persistentLocalCache({}) });
   } catch {
-    return null;
+    db = fsMod.getFirestore(app);
   }
+  return { auth, db, authMod, fsMod };
+}
+
+// SDK を動的 import して初期化する。未設定・読み込み失敗時は null を返す。
+// 進行中の初期化は共有し、失敗した場合のみ次回に再試行できるようにする
+export function initCrew() {
+  if (!initPromise) {
+    initPromise = doInit().catch(() => { initPromise = null; return null; });
+  }
+  return initPromise;
 }
 
 // サインイン状態を購読する。購読解除関数を返す（未設定時は何もしない関数）
@@ -61,14 +62,15 @@ function plansCol(c) {
   return c.fsMod.collection(c.db, ...CREW_PATH);
 }
 
-// 予定を購読する。購読解除関数を返す
+// 予定を購読する。購読解除関数を返す。cb(plans, err) の err は権限エラー等
 export async function watchPlans(cb) {
   const c = await initCrew();
   if (!c) return () => {};
+  const q = c.fsMod.query(plansCol(c), c.fsMod.where('date', '>=', localDateStr()));
   return c.fsMod.onSnapshot(
-    plansCol(c),
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    () => cb([])
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ ...d.data(), id: d.id })), null),
+    (err) => cb([], err)
   );
 }
 
