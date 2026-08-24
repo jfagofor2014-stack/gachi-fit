@@ -1,5 +1,7 @@
 import { exportAll, importAll, getAll, put, remove, uid, get } from '../db.js';
 import { localDateStr } from '../lib/localdate.js';
+import { escapeHtml } from '../lib/html.js';
+import { isCrewConfigured, watchAuth, signIn, signOutCrew } from '../lib/crew.js';
 
 export async function renderSettings(el) {
   const key = localStorage.getItem('gemini_api_key') || '';
@@ -7,6 +9,12 @@ export async function renderSettings(el) {
   const patterns = await getAll('setPatterns');
 
   el.innerHTML = `
+    <div class="card">
+      <strong>メンバー共有</strong>
+      <p class="muted">サインインすると、ホームでメンバーのジム予定を共有できます。</p>
+      <div id="s-crew"></div>
+    </div>
+
     <div class="card">
       <strong>既定インターバル秒数</strong>
       <p class="muted">記録タブのインターバルの初期値。</p>
@@ -137,4 +145,23 @@ export async function renderSettings(el) {
     } catch (e) { msg.textContent = 'インポート失敗: ' + e.message; }
     fileInput.value = '';
   });
+
+  const crewBox = el.querySelector('#s-crew');
+  if (!isCrewConfigured()) {
+    crewBox.innerHTML = '<p class="muted">共有機能は未設定です。</p>';
+  } else {
+    watchAuth((user) => {
+      crewBox.innerHTML = user
+        ? `<p class="muted">${escapeHtml(user.displayName)}（${escapeHtml(user.email)}）でサインイン中</p>
+           <button id="s-signout" class="btn btn-block mt-2">サインアウト</button>`
+        : '<button id="s-signin" class="btn btn-primary btn-block mt-2">Googleでサインイン</button>';
+      const inBtn = crewBox.querySelector('#s-signin');
+      if (inBtn) inBtn.addEventListener('click', async () => {
+        try { await signIn(); }
+        catch (e) { crewBox.innerHTML = `<p class="error">サインインできませんでした: ${escapeHtml(e.message)}</p>`; }
+      });
+      const outBtn = crewBox.querySelector('#s-signout');
+      if (outBtn) outBtn.addEventListener('click', () => signOutCrew());
+    });
+  }
 }
