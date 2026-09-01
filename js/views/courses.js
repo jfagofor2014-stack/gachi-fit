@@ -103,6 +103,8 @@ export async function renderCourses(el) {
       b.addEventListener('click', async () => { await remove('courses', b.dataset.courseDel); renderCourseList(); }));
   }
 
+  let presetBusy = false;
+
   function renderPresets() {
     el.querySelector('#course-presets').innerHTML = DEFAULT_COURSE_PRESETS
       .map((c) => `<span class="chip chip-tag" data-preset-course="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`).join('');
@@ -112,29 +114,35 @@ export async function renderCourses(el) {
 
   async function createFromPreset(presetName) {
     const preset = DEFAULT_COURSE_PRESETS.find((c) => c.name === presetName);
-    if (!preset) return;
+    if (!preset || presetBusy) return;
+    presetBusy = true;
+    el.querySelectorAll('[data-preset-course]').forEach((c) => { c.style.opacity = '0.5'; });
 
-    // 未登録の種目を種目プリセットから補って登録する
-    const current = await getAll('exercises');
-    const missing = missingExerciseNames(preset.exercises, current);
-    for (const name of missing) {
-      const src = DEFAULT_EXERCISE_PRESETS.find((p) => p.name === name);
-      if (!src) continue;
-      await put('exercises', {
-        id: uid(), name: src.name, bodyPart: src.bodyPart, category: src.category,
-        cuePresets: [], setPattern: '通常',
-      });
+    try {
+      // 未登録の種目を種目プリセットから補って登録する
+      const current = await getAll('exercises');
+      const missing = missingExerciseNames(preset.exercises, current);
+      for (const name of missing) {
+        const src = DEFAULT_EXERCISE_PRESETS.find((p) => p.name === name);
+        if (!src) continue;
+        await put('exercises', {
+          id: uid(), name: src.name, bodyPart: src.bodyPart, category: src.category,
+          cuePresets: [], setPattern: '通常',
+        });
+      }
+
+      const after = await getAll('exercises');
+      const exerciseIds = matchExerciseNamesToIds(preset.exercises, after);
+      await put('courses', { id: uid(), name: preset.name, exerciseIds });
+
+      // 画面全体を作り直したあとにメッセージを入れる（再描画で消えないようにするため）
+      await renderCourses(el);
+      el.querySelector('#course-preset-msg').textContent = missing.length
+        ? `${preset.name}コースを作成しました（種目${missing.length}件を追加）`
+        : `${preset.name}コースを作成しました`;
+    } finally {
+      presetBusy = false;
     }
-
-    const after = await getAll('exercises');
-    const exerciseIds = matchExerciseNamesToIds(preset.exercises, after);
-    await put('courses', { id: uid(), name: preset.name, exerciseIds });
-
-    // 画面全体を作り直したあとにメッセージを入れる（再描画で消えないようにするため）
-    await renderCourses(el);
-    el.querySelector('#course-preset-msg').textContent = missing.length
-      ? `${preset.name}コースを作成しました（種目${missing.length}件を追加）`
-      : `${preset.name}コースを作成しました`;
   }
 
   renderPresets();
