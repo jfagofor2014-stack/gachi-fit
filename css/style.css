@@ -107,16 +107,17 @@ details > summary { cursor: pointer; list-style: revert; }
 
 /* --- 折りたたみカード --- */
 .fold > summary { list-style: none; display: flex; justify-content: space-between;
-  align-items: center; min-height: 32px; cursor: pointer; }
+  align-items: center; min-height: 44px; cursor: pointer; }
 .fold > summary::-webkit-details-marker { display: none; }
-.fold > summary::after { content: '▸'; color: var(--muted); font-size: 14px; }
+.fold > summary::after { content: '▸'; color: var(--text); font-size: 20px; }
 .fold[open] > summary::after { content: '▾'; }
 
 /* --- 記録タブ：上部固定の種目ヘッダー --- */
 .ex-header { position: sticky; top: 0; z-index: var(--z-sticky); background: #141400;
   border: 1px solid var(--accent); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
 .ex-header-main { display: flex; justify-content: space-between; align-items: center;
-  min-height: 32px; cursor: pointer; gap: 10px; }
+  min-height: 44px; cursor: pointer; gap: 10px; }
+.caret { font-size: 20px; color: var(--text); }
 .ex-header-name { font-weight: 800; font-size: 17px; }
 .ex-header-stats { display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; gap: 10px; }
 .ex-picker { border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
@@ -125,8 +126,8 @@ details > summary { cursor: pointer; list-style: revert; }
 .interval-bar { position: fixed; left: 12px; right: 12px;
   bottom: calc(68px + env(safe-area-inset-bottom)); z-index: var(--z-fixed);
   background: #0d0d0d; border: 1px solid #333; border-radius: 14px;
-  padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
-.interval-time { font-size: 22px; font-weight: 800; color: var(--accent);
-  font-variant-numeric: tabular-nums; min-width: 62px; }
-.interval-btn { flex: 1; min-height: 44px; font-size: 14px; padding: 0 10px; }
-body.has-interval-bar { padding-bottom: calc(148px + env(safe-area-inset-bottom)); }
+  padding: 14px 12px; display: flex; align-items: center; gap: 10px; }
+.interval-time { font-size: 28px; font-weight: 800; color: var(--accent);
+  font-variant-numeric: tabular-nums; min-width: 76px; }
+.interval-btn { flex: 1; min-height: var(--tap); font-size: 16px; padding: 0 10px; }
+body.has-interval-bar { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }

@@ -10,7 +10,7 @@ export function exerciseHeaderHtml(courses) {
     <div class="ex-header-main" id="w-ex-toggle">
       <div><span class="ex-header-name" id="w-ex-name">—</span>
         <span class="muted" id="w-ex-part"></span></div>
-      <span class="muted" id="w-ex-caret">▾</span>
+      <span class="caret" id="w-ex-caret">▾</span>
     </div>
     <div class="ex-header-stats">
       <span class="muted" id="w-pr">PR: —</span>
