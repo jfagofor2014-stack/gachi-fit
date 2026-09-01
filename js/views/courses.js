@@ -10,6 +10,7 @@ const COURSE_DEFAULT_EX = 4;
 export async function renderCourses(el) {
   const exercises = await getAll('exercises');
   const sets = await getAll('sets');
+  let presetBusy = false;
 
   el.innerHTML = `
     <div class="card">
@@ -102,8 +103,6 @@ export async function renderCourses(el) {
     el.querySelectorAll('[data-course-del]').forEach((b) =>
       b.addEventListener('click', async () => { await remove('courses', b.dataset.courseDel); renderCourseList(); }));
   }
-
-  let presetBusy = false;
 
   function renderPresets() {
     el.querySelector('#course-presets').innerHTML = DEFAULT_COURSE_PRESETS
