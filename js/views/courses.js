@@ -139,6 +139,10 @@ export async function renderCourses(el) {
       el.querySelector('#course-preset-msg').textContent = missing.length
         ? `${preset.name}コースを作成しました（種目${missing.length}件を追加）`
         : `${preset.name}コースを作成しました`;
+    } catch (e) {
+      // 失敗時は再描画されないので、チップの見た目を自分で戻して再タップできると伝える
+      el.querySelectorAll('[data-preset-course]').forEach((c) => { c.style.opacity = ''; });
+      el.querySelector('#course-preset-msg').textContent = 'コースを作成できませんでした: ' + e.message;
     } finally {
       presetBusy = false;
     }
