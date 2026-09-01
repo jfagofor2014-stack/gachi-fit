@@ -1,7 +1,9 @@
 import { getAll, put, remove, uid } from '../db.js';
 import { escapeHtml } from '../lib/html.js';
 import { COURSE_MIN_EX, COURSE_MAX_EX } from '../lib/constants.js';
-import { mostUsedExerciseIds } from '../lib/courses.js';
+import { mostUsedExerciseIds, matchExerciseNamesToIds } from '../lib/courses.js';
+import { DEFAULT_COURSE_PRESETS, missingExerciseNames } from '../lib/coursePresets.js';
+import { DEFAULT_EXERCISE_PRESETS } from '../lib/exercisePresets.js';
 
 const COURSE_DEFAULT_EX = 4;
 
@@ -12,6 +14,9 @@ export async function renderCourses(el) {
   el.innerHTML = `
     <div class="card">
       <strong>コース</strong>
+      <div class="field mt-2"><label>プリセットから作成</label>
+        <div id="course-presets"></div></div>
+      <div id="course-preset-msg" class="muted mt-1"></div>
       <div class="field mt-2"><label>コース名</label>
         <input id="course-name" class="input" placeholder="例: 胸・肩コース" /></div>
       <div id="course-slots" class="mt-2"></div>
@@ -31,6 +36,8 @@ export async function renderCourses(el) {
     el.querySelector('#course-autofill').disabled = true;
     el.querySelector('#course-slot-add').disabled = true;
     el.querySelector('#course-slot-remove').disabled = true;
+    renderPresets();
+    renderCourseList();
     return;
   }
 
@@ -96,6 +103,41 @@ export async function renderCourses(el) {
       b.addEventListener('click', async () => { await remove('courses', b.dataset.courseDel); renderCourseList(); }));
   }
 
+  function renderPresets() {
+    el.querySelector('#course-presets').innerHTML = DEFAULT_COURSE_PRESETS
+      .map((c) => `<span class="chip chip-tag" data-preset-course="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`).join('');
+    el.querySelectorAll('[data-preset-course]').forEach((chip) =>
+      chip.addEventListener('click', () => createFromPreset(chip.dataset.presetCourse)));
+  }
+
+  async function createFromPreset(presetName) {
+    const preset = DEFAULT_COURSE_PRESETS.find((c) => c.name === presetName);
+    if (!preset) return;
+
+    // 未登録の種目を種目プリセットから補って登録する
+    const current = await getAll('exercises');
+    const missing = missingExerciseNames(preset.exercises, current);
+    for (const name of missing) {
+      const src = DEFAULT_EXERCISE_PRESETS.find((p) => p.name === name);
+      if (!src) continue;
+      await put('exercises', {
+        id: uid(), name: src.name, bodyPart: src.bodyPart, category: src.category,
+        cuePresets: [], setPattern: '通常',
+      });
+    }
+
+    const after = await getAll('exercises');
+    const exerciseIds = matchExerciseNamesToIds(preset.exercises, after);
+    await put('courses', { id: uid(), name: preset.name, exerciseIds });
+
+    // 画面全体を作り直したあとにメッセージを入れる（再描画で消えないようにするため）
+    await renderCourses(el);
+    el.querySelector('#course-preset-msg').textContent = missing.length
+      ? `${preset.name}コースを作成しました（種目${missing.length}件を追加）`
+      : `${preset.name}コースを作成しました`;
+  }
+
+  renderPresets();
   renderCourseSlots();
   renderCourseList();
 }
