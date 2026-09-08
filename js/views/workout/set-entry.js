@@ -263,6 +263,20 @@ export function createSetEntry(el, { exercises, onModeChange }) {
         : defaultRowValues(DEFAULT_ROWS);
       renderRows();
     },
+    fillNextRow: ({ weight, reps }) => {
+      // 重量か回数のどちらかが未入力の最初の行を対象にする。
+      // 「完全に空の行」ではないため、「100キロ」「8回」と分けて話しても同じ行が補完される
+      let i = rowValues.findIndex((rv) => rv.weight === 0 || rv.reps === 0);
+      if (i === -1) {
+        if (rowValues.length >= MAX_ROWS) return null;
+        rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
+        i = rowValues.length - 1;
+      }
+      if (weight !== null && weight !== undefined) rowValues[i].weight = weight;
+      if (reps !== null && reps !== undefined) rowValues[i].reps = reps;
+      renderRows();
+      return i;
+    },
     ssExerciseIds: () => ssExerciseIds,
     ssRounds: () => ssRounds,
     resetSuperset: () => {
