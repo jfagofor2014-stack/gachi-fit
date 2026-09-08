@@ -31,7 +31,12 @@ function patchTodayWorkout(patch = {}) {
   return run;
 }
 
+// renderWorkout 1回分のローカルに持つと、タブを離れたあとも認識が止まらず
+// 古いコールバックが別画面のDOMを触って例外になる（interval-bar.js と同じ方式で防ぐ）
+let stopVoiceListening = null;
+
 export async function renderWorkout(el, navigate, opts = {}) {
+  if (stopVoiceListening) { stopVoiceListening(); stopVoiceListening = null; }
   const exercises = await getAll('exercises');
   const allSets = await getAll('sets');
   const prs = computePRs(allSets);
@@ -126,10 +131,9 @@ export async function renderWorkout(el, navigate, opts = {}) {
     const voiceStatus = el.querySelector('#w-voice-status');
     voiceBox.style.display = 'block';
 
-    let stopListening = null;
     const idle = () => {
       voiceBtn.textContent = '🎤 音声で入力';
-      stopListening = null;
+      stopVoiceListening = null;
     };
 
     const applyUtterance = (text) => {
@@ -166,10 +170,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
     };
 
     voiceBtn.addEventListener('click', () => {
-      if (stopListening) { stopListening(); idle(); return; }
+      if (stopVoiceListening) { stopVoiceListening(); idle(); return; }
       voiceStatus.textContent = '';
       voiceBtn.textContent = '聞いています…';
-      stopListening = startListening({
+      stopVoiceListening = startListening({
         onInterim: (t) => { voiceStatus.textContent = t; },
         onResult: (t) => { idle(); applyUtterance(t); },
         onError: (code) => { idle(); voiceStatus.textContent = ERROR_TEXT[code] || '認識できませんでした'; },
