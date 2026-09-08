@@ -264,6 +264,9 @@ export function createSetEntry(el, { exercises, onModeChange }) {
       renderRows();
     },
     fillNextRow: ({ weight, reps }) => {
+      // ステッパーの手入力は明示的に同期するまで rowValues に入らない。
+      // 先に取り込まないと、手で埋めた行を「空き」と誤判定して上書きしてしまう
+      syncRowValuesFromSteppers();
       // 重量か回数のどちらかが未入力の最初の行を対象にする。
       // 「完全に空の行」ではないため、「100キロ」「8回」と分けて話しても同じ行が補完される
       let i = rowValues.findIndex((rv) => rv.weight === 0 || rv.reps === 0);
