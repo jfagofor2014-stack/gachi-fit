@@ -131,3 +131,6 @@ details > summary { cursor: pointer; list-style: revert; }
   font-variant-numeric: tabular-nums; min-width: 76px; }
 .interval-btn { flex: 1; min-height: var(--tap); font-size: 16px; padding: 0 10px; }
 body.has-interval-bar { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
+
+/* --- 記録タブ：音声入力 --- */
+.voice-btn { width: 100%; min-height: 64px; font-size: 18px; }

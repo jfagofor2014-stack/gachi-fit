@@ -9,6 +9,8 @@ import { openSetEditor } from './set-editor.js';
 import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/interval-bar.js';
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 import { setEntryHtml, createSetEntry } from './workout/set-entry.js';
+import { parseSetUtterance } from '../lib/voiceParse.js';
+import { isVoiceSupported, startListening } from '../lib/voice.js';
 
 const todayStr = () => localDateStr();
 
@@ -116,6 +118,64 @@ export async function renderWorkout(el, navigate, opts = {}) {
   initIntervalBar(el, defaultSec);
   await exPanel.refresh();
   setEntry.applyMode('normal');
+
+  // 音声入力(未対応環境ではボタンごと出さない)
+  if (isVoiceSupported()) {
+    const voiceBox = el.querySelector('#w-voice');
+    const voiceBtn = el.querySelector('#w-voice-btn');
+    const voiceStatus = el.querySelector('#w-voice-status');
+    voiceBox.style.display = 'block';
+
+    let stopListening = null;
+    const idle = () => {
+      voiceBtn.textContent = '🎤 音声で入力';
+      stopListening = null;
+    };
+
+    const applyUtterance = (text) => {
+      const parsed = parseSetUtterance(text, exercises.map((e) => e.name));
+      if (parsed.exerciseName === null && parsed.weight === null && parsed.reps === null) {
+        voiceStatus.textContent = '聞き取れませんでした';
+        return;
+      }
+      if (parsed.exerciseName) {
+        const ex = exercises.find((e) => e.name === parsed.exerciseName);
+        if (ex) exPanel.selectExercise(ex.id);
+      }
+      if (parsed.weight === null && parsed.reps === null) {
+        voiceStatus.textContent = `${parsed.exerciseName} に切り替えました`;
+        return;
+      }
+      const row = setEntry.fillNextRow({ weight: parsed.weight, reps: parsed.reps });
+      if (row === null) {
+        voiceStatus.textContent = '行がいっぱいです。記録してから続けてください';
+        return;
+      }
+      const parts = [
+        parsed.exerciseName,
+        parsed.weight !== null ? `${parsed.weight}kg` : null,
+        parsed.reps !== null ? `${parsed.reps}回` : null,
+      ].filter(Boolean);
+      voiceStatus.textContent = `${parts.join(' / ')} を入力しました`;
+    };
+
+    const ERROR_TEXT = {
+      'not-allowed': 'マイクの使用を許可してください',
+      'no-speech': '聞き取れませんでした',
+      network: '通信できませんでした。手入力で記録できます',
+    };
+
+    voiceBtn.addEventListener('click', () => {
+      if (stopListening) { stopListening(); idle(); return; }
+      voiceStatus.textContent = '';
+      voiceBtn.textContent = '聞いています…';
+      stopListening = startListening({
+        onInterim: (t) => { voiceStatus.textContent = t; },
+        onResult: (t) => { idle(); applyUtterance(t); },
+        onError: (code) => { idle(); voiceStatus.textContent = ERROR_TEXT[code] || '認識できませんでした'; },
+      });
+    });
+  }
 
   // まとめて記録
   el.querySelector('#w-save').addEventListener('click', async () => {

@@ -25,6 +25,10 @@ export function setEntryHtml() {
       <button data-m="dropset">ドロップセット</button>
     </div>
     <div id="w-normal-block">
+      <div id="w-voice" style="display:none">
+        <button type="button" id="w-voice-btn" class="btn btn-primary voice-btn">🎤 音声で入力</button>
+        <div id="w-voice-status" class="muted mt-1"></div>
+      </div>
       <div id="w-rows" class="mt-2"></div>
       <div class="row mt-2">
         <button type="button" id="w-row-add" class="btn">＋ 行を追加</button>
