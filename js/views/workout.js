@@ -10,7 +10,7 @@ import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/in
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 import { setEntryHtml, createSetEntry } from './workout/set-entry.js';
 import { parseSetUtterance } from '../lib/voiceParse.js';
-import { isVoiceSupported, startListening } from '../lib/voice.js';
+import { isVoiceSupported, startListening, stopVoiceInput } from '../lib/voice.js';
 
 const todayStr = () => localDateStr();
 
@@ -31,12 +31,14 @@ function patchTodayWorkout(patch = {}) {
   return run;
 }
 
-// renderWorkout 1回分のローカルに持つと、タブを離れたあとも認識が止まらず
+// renderWorkout 1回分のローカル変数に持つと、タブを離れたあとも認識が止まらず
 // 古いコールバックが別画面のDOMを触って例外になる（interval-bar.js と同じ方式で防ぐ）
 let stopVoiceListening = null;
+let voiceSession = null;
 
 export async function renderWorkout(el, navigate, opts = {}) {
   if (stopVoiceListening) { stopVoiceListening(); stopVoiceListening = null; }
+  voiceSession = null;
   const exercises = await getAll('exercises');
   const allSets = await getAll('sets');
   const prs = computePRs(allSets);
@@ -117,6 +119,16 @@ export async function renderWorkout(el, navigate, opts = {}) {
     exercises,
     onModeChange: (m) => {
       el.querySelector('#w-ex-header').style.display = m === 'superset' ? 'none' : 'block';
+      // 音声ブロックは隠れるだけなので、聞いたままだと結果が隠れた行に入ってしまう。
+      // 停止に合わせてボタンの状態も戻さないと「聞いています…」のまま残り、
+      // 通常モードに戻したあとの最初のタップが空振りする
+      if (m === 'superset') {
+        stopVoiceInput();
+        voiceSession = null;
+        stopVoiceListening = null;
+        const vb = el.querySelector('#w-voice-btn');
+        if (vb) vb.textContent = '🎤 音声で入力';
+      }
       if (m !== 'superset') exPanel.refresh();
     },
   });
@@ -144,6 +156,18 @@ export async function renderWorkout(el, navigate, opts = {}) {
       }
       if (parsed.exerciseName) {
         const ex = exercises.find((e) => e.name === parsed.exerciseName);
+        if (ex && ex.id !== exPanel.currentExerciseId()) {
+          // 行は種目に紐づかず保存時に一括スタンプされるため、未保存の入力が
+          // 残ったまま種目を変えると前の種目の記録が新しい種目として保存されてしまう
+          setEntry.syncFromSteppers();
+          const pending = setEntry.rows().some((rv) => rv.weight > 0 && rv.reps > 0);
+          if (pending) {
+            const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
+            voiceStatus.textContent =
+              `${cur ? cur.name : '前の種目'}の入力が残っています。先に「まとめて記録」を押してください`;
+            return;
+          }
+        }
         if (ex) exPanel.selectExercise(ex.id);
       }
       if (parsed.weight === null && parsed.reps === null) {
@@ -155,16 +179,19 @@ export async function renderWorkout(el, navigate, opts = {}) {
         voiceStatus.textContent = '行がいっぱいです。記録してから続けてください';
         return;
       }
+      const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
       const parts = [
-        parsed.exerciseName,
+        cur ? cur.name : null,
         parsed.weight !== null ? `${parsed.weight}kg` : null,
         parsed.reps !== null ? `${parsed.reps}回` : null,
       ].filter(Boolean);
-      voiceStatus.textContent = `${parts.join(' / ')} を入力しました`;
+      voiceStatus.textContent = `セット${row + 1}: ${parts.join(' / ')} を入力しました`;
     };
 
     const ERROR_TEXT = {
       'not-allowed': 'マイクの使用を許可してください',
+      'service-not-allowed': 'マイクの使用を許可してください',
+      'audio-capture': 'マイクを利用できません',
       'no-speech': '聞き取れませんでした',
       network: '通信できませんでした。手入力で記録できます',
     };
@@ -173,10 +200,16 @@ export async function renderWorkout(el, navigate, opts = {}) {
       if (stopVoiceListening) { stopVoiceListening(); idle(); return; }
       voiceStatus.textContent = '';
       voiceBtn.textContent = '聞いています…';
+      const session = {};
+      voiceSession = session;
       stopVoiceListening = startListening({
-        onInterim: (t) => { voiceStatus.textContent = t; },
-        onResult: (t) => { idle(); applyUtterance(t); },
-        onError: (code) => { idle(); voiceStatus.textContent = ERROR_TEXT[code] || '認識できませんでした'; },
+        onInterim: (t) => { if (voiceSession !== session) return; voiceStatus.textContent = t; },
+        onResult: (t) => { if (voiceSession !== session) return; idle(); applyUtterance(t); },
+        onError: (code) => {
+          if (voiceSession !== session) return;
+          idle();
+          voiceStatus.textContent = ERROR_TEXT[code] || '認識できませんでした';
+        },
       });
     });
   }

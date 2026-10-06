@@ -279,7 +279,12 @@ export function createSetEntry(el, { exercises, onModeChange }) {
         rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
         i = rowValues.length - 1;
       }
-      if (weight !== null && weight !== undefined) rowValues[i].weight = weight;
+      if (weight !== null && weight !== undefined) {
+        rowValues[i].weight = weight;
+        // 音声で明示された重量は手入力と同格。立てておかないと、
+        // セット1をステッパーで訂正したときに後続行へ伝播して壊す
+        rowValues[i].weightTouched = true;
+      }
       if (reps !== null && reps !== undefined) rowValues[i].reps = reps;
       renderRows();
       return i;
