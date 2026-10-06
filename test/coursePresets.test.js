@@ -55,3 +55,24 @@ test('course preset names are unique', () => {
   const names = DEFAULT_COURSE_PRESETS.map((c) => c.name);
   assert.equal(new Set(names).size, names.length);
 });
+
+test('every course preset declares env gym or home', () => {
+  for (const c of DEFAULT_COURSE_PRESETS) {
+    assert.ok(c.env === 'gym' || c.env === 'home', `${c.name} の env が不正`);
+  }
+});
+
+test('there are 6 gym and 7 home course presets', () => {
+  assert.equal(DEFAULT_COURSE_PRESETS.filter((c) => c.env === 'gym').length, 6);
+  assert.equal(DEFAULT_COURSE_PRESETS.filter((c) => c.env === 'home').length, 7);
+});
+
+test('home course presets are prefixed with 自宅 and use only home-ok exercises', () => {
+  const byName = new Map(DEFAULT_EXERCISE_PRESETS.map((p) => [p.name, p]));
+  for (const c of DEFAULT_COURSE_PRESETS.filter((x) => x.env === 'home')) {
+    assert.ok(c.name.startsWith('自宅 '), `${c.name} は「自宅 」で始める`);
+    for (const name of c.exercises) {
+      assert.equal(byName.get(name).homeOk, true, `${c.name} の「${name}」は自宅でできない種目`);
+    }
+  }
+});
