@@ -16,6 +16,9 @@ import { buildCourseSuggestionPrompt, parseCourseSuggestion, callGemini } from '
 import { upcomingPlans, groupPlansByDate, canEditPlan } from '../lib/plans.js';
 import { watchAuth, watchPlans } from '../lib/crew.js';
 import { openPlanEditor } from './plan-editor.js';
+import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
+import { registerHomeCoursePack } from '../lib/coursePresets.js';
+import { DEFAULT_EXERCISE_PRESETS } from '../lib/exercisePresets.js';
 
 // renderHome は再入し得る（app.js のタブハンドラが navigate を await しない）ため、
 // 世代カウンタで古い呼び出しの購読を確実に破棄する
@@ -25,12 +28,15 @@ let unsubCrewAuth = null;
 let unsubCrewPlans = null;
 
 export async function renderHome(el, navigate) {
-  const exercises = await getAll('exercises');
+  // 名前の解決と集計には全種目、コース選択とAI提案には環境で絞った種目を使う
+  const allExercises = await getAll('exercises');
+  const env = getEnv();
+  const exercises = visibleExercises(allExercises, env);
   const sets = await getAll('sets');
   const prs = computePRs(sets);
   const today = localDateStr();
   const workouts = await getAll('workouts');
-  const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
+  const nameOf = (id) => allExercises.find((e) => e.id === id)?.name || '?';
 
   const prRows = Object.entries(prs)
     .sort((a, b) => b[1] - a[1])
@@ -43,10 +49,10 @@ export async function renderHome(el, navigate) {
     ? `<div class="card"><div class="muted">大会まで</div><div class="countdown">${days}<span style="font-size:24px">日</span></div></div>`
     : '';
 
-  const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const exById = Object.fromEntries(allExercises.map((e) => [e.id, e]));
   const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
 
-  const courses = await getAll('courses');
+  const courses = (await getAll('courses')).filter((c) => courseAvailable(c, allExercises, env));
   const suggestCategories = categoriesWithExercises(exercises, BODY_PARTS);
   const lastTrained = lastTrainedDateByCategory(sets, exById, wkById);
 
@@ -56,12 +62,16 @@ export async function renderHome(el, navigate) {
       </div>`
     : '<p class="muted mt-2">「管理」タブでコースを登録すると、ここから選べます。</p>';
 
-  const suggestCard = exercises.length
+  // 自宅環境で表示できるコースがないときは、自宅コースを一括で入れるボタンを出す
+  const showPackBtn = env === 'home' && courses.length === 0;
+  const suggestCard = (exercises.length || env === 'home')
     ? `<div class="card">
         <strong>お帰りなさい。今日はどんなトレーニングをしますか？</strong>
         ${courseButtons}
-        <button type="button" id="ai-course-btn" class="btn btn-block" style="margin-top:10px">AIが今日のコースを提案</button>
-        <div id="ai-course-out" style="margin-top:10px"></div>
+        ${showPackBtn ? '<button type="button" id="home-pack-btn" class="btn btn-block" style="margin-top:10px">自宅向けの種目とコースをまとめて追加</button>' : ''}
+        ${exercises.length ? `<button type="button" id="ai-course-btn" class="btn btn-block" style="margin-top:10px">AIが今日のコースを提案</button>
+        <div id="ai-course-out" style="margin-top:10px"></div>` : ''}
+        <div id="home-msg" class="muted" style="margin-top:8px"></div>
       </div>`
     : '';
 
@@ -105,11 +115,29 @@ export async function renderHome(el, navigate) {
   renderCalendar(el.querySelector('#home-cal'), {
     trainedDates,
     initialDate: new Date(),
-    onSelect: (date) => renderDayDetail(el.querySelector('#home-day'), date, { exercises, nameOf }),
+    onSelect: (date) => renderDayDetail(el.querySelector('#home-day'), date, { exercises: allExercises, nameOf }),
   });
 
   el.querySelectorAll('[data-select-course]').forEach((b) =>
     b.addEventListener('click', () => navigate('workout', { initialCourseId: b.dataset.selectCourse })));
+
+  const packBtn = el.querySelector('#home-pack-btn');
+  if (packBtn) {
+    packBtn.addEventListener('click', async () => {
+      const msg = el.querySelector('#home-msg');
+      packBtn.disabled = true;
+      msg.textContent = '追加中…';
+      try {
+        const r = await registerHomeCoursePack({ getAll, put, uid, exercisePresets: DEFAULT_EXERCISE_PRESETS });
+        // 描き直すとボタンもメッセージも消えるので、描き直したあとにメッセージを入れる
+        await renderHome(el, navigate);
+        el.querySelector('#home-msg').textContent = `種目${r.exercises}件・コース${r.courses}件を追加しました`;
+      } catch (e) {
+        packBtn.disabled = false;
+        msg.textContent = '追加できませんでした: ' + e.message;
+      }
+    });
+  }
 
   const aiCourseBtn = el.querySelector('#ai-course-btn');
   if (aiCourseBtn) {
