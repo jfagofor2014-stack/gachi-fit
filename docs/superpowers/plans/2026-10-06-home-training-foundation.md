@@ -1703,17 +1703,17 @@ import { latestBodyWeight } from '../lib/bodyweight.js';
 
 - [ ] **Step 7: `workout.js` — 種目が変わったら体重を入れる**
 
-次の1行:
+次の1行（Task 6 の修正で `allExercises` が加わっている）:
 
 ```js
-  const exPanel = createExercisePanel(el, { exercises, courses, prs });
+  const exPanel = createExercisePanel(el, { exercises, allExercises, courses, prs });
 ```
 
 を次に置き換える（`setEntry` はこの直後に作られるが、コールバックは `refresh()` からしか呼ばれず、最初の `refresh()` は `setEntry` の生成後なので参照できる）:
 
 ```js
   const exPanel = createExercisePanel(el, {
-    exercises, courses, prs,
+    exercises, allExercises, courses, prs,
     // 自重種目では重量欄に直近の体重を入れる。種目が変わるたびに呼ばれる
     onExerciseChange: (exId) => {
       const ex = exercises.find((e) => e.id === exId);
