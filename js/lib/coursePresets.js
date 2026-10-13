@@ -1,3 +1,5 @@
+import { matchExerciseNamesToIds } from './courses.js';
+
 // よく使う組み合わせのコース。種目名は DEFAULT_EXERCISE_PRESETS に実在するものだけを使う。
 // env: 'gym' はジム用、'home' は自宅用（自宅用は homeOk の種目だけで組む）
 export const DEFAULT_COURSE_PRESETS = [
@@ -28,4 +30,40 @@ export function missingExerciseNames(names, exercises) {
     out.push(name);
   }
   return out;
+}
+
+// コースプリセットを1件登録する。未登録の種目は種目プリセットから補って登録し
+// （homeOk / bodyweight も引き継ぐ）、コースを作る。依存注入でテスト可能
+// deps: { getAll, put, uid, exercisePresets }
+export async function registerCoursePreset(preset, { getAll, put, uid, exercisePresets }) {
+  const current = await getAll('exercises');
+  let added = 0;
+  for (const name of missingExerciseNames(preset.exercises, current)) {
+    const src = exercisePresets.find((p) => p.name === name);
+    if (!src) continue;
+    await put('exercises', {
+      id: uid(), name: src.name, bodyPart: src.bodyPart, category: src.category,
+      cuePresets: [], setPattern: '通常',
+      homeOk: src.homeOk !== false, bodyweight: src.bodyweight === true,
+    });
+    added++;
+  }
+  const after = await getAll('exercises');
+  const exerciseIds = matchExerciseNamesToIds(preset.exercises, after);
+  await put('courses', { id: uid(), name: preset.name, exerciseIds });
+  return { added };
+}
+
+// 自宅コースのプリセットをまとめて登録する。同名のコースが既にあれば作らない（何度呼んでも重複しない）
+export async function registerHomeCoursePack(deps) {
+  const have = new Set((await deps.getAll('courses')).map((c) => c.name));
+  let exercises = 0;
+  let courses = 0;
+  for (const preset of DEFAULT_COURSE_PRESETS.filter((p) => p.env === 'home')) {
+    if (have.has(preset.name)) continue;
+    const { added } = await registerCoursePreset(preset, deps);
+    exercises += added;
+    courses++;
+  }
+  return { exercises, courses };
 }
