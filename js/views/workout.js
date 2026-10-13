@@ -122,7 +122,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
     setTimeout(() => { el.querySelector('#w-impression-save').textContent = '感想を保存'; }, 1500);
   });
 
-  const exPanel = createExercisePanel(el, { exercises, courses, prs });
+  const exPanel = createExercisePanel(el, { exercises, allExercises, courses, prs });
   const setEntry = createSetEntry(el, {
     exercises,
     onModeChange: (m) => {

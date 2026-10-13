@@ -33,7 +33,7 @@ export function exerciseHeaderHtml(courses) {
   </div>`;
 }
 
-export function createExercisePanel(el, { exercises, courses, prs, onExerciseChange }) {
+export function createExercisePanel(el, { exercises, courses, prs, onExerciseChange, allExercises = exercises }) {
   const partGroups = {};
   for (const e of exercises) (partGroups[categoryKey(e)] ||= []).push(e);
   const parts = categoriesWithExercises(exercises, BODY_PARTS);
@@ -95,7 +95,7 @@ export function createExercisePanel(el, { exercises, courses, prs, onExerciseCha
     const cat = categoryKey(ex);
     const sets = await getAll('sets');
     const workouts = await getAll('workouts');
-    const exById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+    const exById = Object.fromEntries(allExercises.map((e) => [e.id, e]));
     const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
     const today = localDateStr();
     const todayVol = categoryVolumeForDate(sets, exById, wkById, today)[cat] || 0;
