@@ -22,6 +22,10 @@ export async function renderExercises(el) {
         <input id="ex-detail" class="input" placeholder="例: 上部" /></div>
       <div class="field"><label>意識ポイント（カンマ区切り）</label>
         <input id="ex-cues" class="input" placeholder="例: 肩甲骨下制, 腹圧" /></div>
+      <div class="field"><label>
+        <input type="checkbox" id="ex-homeok" checked style="width:22px;height:22px;vertical-align:middle;margin-right:8px" />自宅でできる（自宅環境の選択・提案に出す）</label></div>
+      <div class="field"><label>
+        <input type="checkbox" id="ex-bw" style="width:22px;height:22px;vertical-align:middle;margin-right:8px" />自重種目（重量欄に体重が入る）</label></div>
       <div class="field"><label>セットパターン</label>
         <div class="seg" id="ex-pattern">
           ${patterns.map((p, i) => `<button data-p="${p}" class="${i === 0 ? 'sel' : ''}">${p}</button>`).join('')}
@@ -42,13 +46,15 @@ export async function renderExercises(el) {
   el.querySelector('#ex-search').addEventListener('input', (e) => {
     const results = searchPresets(e.target.value);
     el.querySelector('#ex-search-results').innerHTML = results.length
-      ? results.map((p) => `<span class="chip chip-tag" data-preset-name="${escapeHtml(p.name)}" data-preset-part="${escapeHtml(p.bodyPart)}" data-preset-cat="${escapeHtml(p.category)}">${escapeHtml(p.name)}</span>`).join('')
+      ? results.map((p) => `<span class="chip chip-tag" data-preset-name="${escapeHtml(p.name)}" data-preset-part="${escapeHtml(p.bodyPart)}" data-preset-cat="${escapeHtml(p.category)}" data-preset-home="${p.homeOk !== false ? '1' : '0'}" data-preset-bw="${p.bodyweight ? '1' : '0'}">${escapeHtml(p.name)}</span>`).join('')
       : (e.target.value.trim() ? '<p class="muted">候補がありません。</p>' : '');
     el.querySelectorAll('#ex-search-results [data-preset-name]').forEach((chip) =>
       chip.addEventListener('click', () => {
         el.querySelector('#ex-name').value = chip.dataset.presetName;
         el.querySelector('#ex-cat').value = chip.dataset.presetCat;
         el.querySelector('#ex-detail').value = chip.dataset.presetPart.split('/').slice(1).join('/');
+        el.querySelector('#ex-homeok').checked = chip.dataset.presetHome === '1';
+        el.querySelector('#ex-bw').checked = chip.dataset.presetBw === '1';
         el.querySelector('#ex-search').value = '';
         el.querySelector('#ex-search-results').innerHTML = '';
       }));
@@ -61,8 +67,10 @@ export async function renderExercises(el) {
     const bodyPart = detail ? `${category}/${detail}` : category;
     const cuePresets = el.querySelector('#ex-cues').value
       .split(',').map((s) => s.trim()).filter(Boolean);
+    const homeOk = el.querySelector('#ex-homeok').checked;
+    const bodyweight = el.querySelector('#ex-bw').checked;
     if (!name) { el.querySelector('#ex-error').textContent = '種目名を入力してください'; return; }
-    await put('exercises', { id: uid(), name, bodyPart, cuePresets, setPattern: pattern, category });
+    await put('exercises', { id: uid(), name, bodyPart, cuePresets, setPattern: pattern, category, homeOk, bodyweight });
     renderExercises(el);
   });
 
@@ -83,6 +91,10 @@ function renderList(el, exercises) {
           <span class="muted"> ${escapeHtml(e.bodyPart || '')}</span>
           <div>${(e.cuePresets || []).map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>
           <span class="chip">${escapeHtml(e.setPattern || '通常')}</span>
+          <div style="margin-top:8px">
+            <span class="chip chip-tag ${e.homeOk !== false ? 'sel' : ''}" role="button" data-toggle="homeOk" data-id="${e.id}">🏠 自宅可</span>
+            <span class="chip chip-tag ${e.bodyweight ? 'sel' : ''}" role="button" data-toggle="bodyweight" data-id="${e.id}">自重</span>
+          </div>
         </div>
         <button class="btn btn-danger btn-sm" data-del="${e.id}">削除</button>
       </div>
@@ -90,6 +102,16 @@ function renderList(el, exercises) {
   list.querySelectorAll('[data-del]').forEach((b) =>
     b.addEventListener('click', async () => {
       await remove('exercises', b.dataset.del);
+      renderExercises(el);
+    }));
+  // 「自宅可」「自重」のチップをタップして切り替える
+  list.querySelectorAll('[data-toggle]').forEach((chip) =>
+    chip.addEventListener('click', async () => {
+      const ex = exercises.find((e) => e.id === chip.dataset.id);
+      if (!ex) return;
+      const key = chip.dataset.toggle;
+      const current = key === 'homeOk' ? ex.homeOk !== false : ex.bodyweight === true;
+      await put('exercises', { ...ex, [key]: !current });
       renderExercises(el);
     }));
 }
