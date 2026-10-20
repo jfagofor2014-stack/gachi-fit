@@ -38,7 +38,7 @@ function weekMessage(c, today) {
 
 function weekRowHtml(w) {
   const sessions = w.sessions.length
-    ? w.sessions.map((s) => `${md(s.date)} ${Math.round(s.minutes)}分${s.qualifies ? ' ✔' : ''}`).join('　')
+    ? w.sessions.map((s) => `${md(s.date)} ${Math.floor(s.minutes)}分${s.qualifies ? ' ✔' : ''}`).join('　')
     : '記録なし';
   return `<div class="creature-week-row">
     <div class="list-item" style="border:none;padding:0">
@@ -101,7 +101,7 @@ export async function renderCreatureCard(box, { workouts, sets, exercises, silen
       <div class="creature-week">
         <span>今週</span><span class="creature-dots">${dots}</span><span>${escapeHtml(weekMessage(c, today))}</span>
       </div>
-      <details id="creature-details">
+      <details id="creature-details" class="fold">
         <summary>くわしく</summary>
         ${weeks.map(weekRowHtml).join('')}
         ${RULES_HTML}
@@ -111,10 +111,12 @@ export async function renderCreatureCard(box, { workouts, sets, exercises, silen
 
   box.querySelectorAll('[data-rest-week]').forEach((btn) =>
     btn.addEventListener('click', async () => {
+      box.querySelectorAll('[data-rest-week]').forEach((b) => { b.disabled = true; });
       const ws = btn.dataset.restWeek;
-      const rest = new Set(doc.restWeeks || []);
+      const cur = (await get('goals', DOC_ID)) || doc;
+      const rest = new Set(cur.restWeeks || []);
       if (rest.has(ws)) rest.delete(ws); else rest.add(ws);
-      await put('goals', { ...doc, restWeeks: [...rest].sort() });
+      await put('goals', { ...cur, restWeeks: [...rest].sort() });
       await renderCreatureCard(box, { workouts, sets, exercises, silent: true });
     }));
 }

@@ -32,9 +32,8 @@ function egg(P, sad, mood) {
   s += `<circle cx="${CX + 12}" cy="${cy + 10}" r="5" fill="${P.shade}"/><circle cx="${CX - 14}" cy="${cy + 18}" r="4" fill="${P.shade}"/><circle cx="${CX + 10}" cy="${cy - 14}" r="3.5" fill="${P.shade}"/>`;
   s += `<path d="M${CX - 28} ${cy} l8 -9 l7 9 l7 -9 l7 9 l7 -9 l7 9 l7 -9" fill="none" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
   s += '</g>';
-  s += sad
-    ? `<path d="M${CX + 34} ${cy - 26} q6 9 0 14 q-6 -5 0 -14z" fill="#7fc8ff"/>`
-    : star(CX + 40, cy - 34, 7);
+  if (sad) s += `<path d="M${CX + 34} ${cy - 26} q6 9 0 14 q-6 -5 0 -14z" fill="#7fc8ff"/>`;
+  else if (mood === 'genki') s += star(CX + 40, cy - 34, 7);
   return wrap(s);
 }
 
@@ -140,7 +139,7 @@ export function monsterSvg(stage, mood) {
     s += `<rect x="8" y="${barY - 2}" width="124" height="5" rx="2" fill="#d0d0d0"/><rect x="14" y="${barY - 14}" width="8" height="30" rx="2" fill="#2b2b2b"/><rect x="118" y="${barY - 14}" width="8" height="30" rx="2" fill="#2b2b2b"/><rect x="23" y="${barY - 9}" width="6" height="20" rx="2" fill="#555"/><rect x="111" y="${barY - 9}" width="6" height="20" rx="2" fill="#555"/>`;
     for (const d of D) s += `<circle cx="${CX + d * 34}" cy="${barY + 1}" r="7" fill="${P.body}"/>`;
   }
-  if (!sad && (st === 3 || st === 4)) s += star(CX - rx - 16, cy - r * 0.95, 6) + star(CX + rx + 16, cy - r * 1.05, 5);
+  if (md === 'genki' && (st === 3 || st === 4)) s += star(CX - rx - 16, cy - r * 0.95, 6) + star(CX + rx + 16, cy - r * 1.05, 5);
   s += '</g>';
 
   if (sad) {

@@ -89,3 +89,12 @@ test('monsterSvg treats object prototype keys as an unknown mood', () => {
     assert.equal(monsterSvg(2, mood), monsterSvg(2, 'normal'), mood);
   }
 });
+
+test('monsterSvg draws sparkles only for the genki mood', () => {
+  const STAR_COLOR = '#ffd24a';
+  for (const stage of [0, 3, 4]) {
+    assert.ok(monsterSvg(stage, 'genki').includes(STAR_COLOR), `${stage}/genki has sparkles`);
+    assert.ok(!monsterSvg(stage, 'normal').includes(STAR_COLOR), `${stage}/normal has no sparkles`);
+    assert.ok(!monsterSvg(stage, 'shobori').includes(STAR_COLOR), `${stage}/shobori has no sparkles`);
+  }
+});
