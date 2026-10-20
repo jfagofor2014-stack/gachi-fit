@@ -45,6 +45,8 @@ h2.view-title { font-size: 22px; margin: 4px 0 16px; }
 .seg button.sel { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
 .row { display: flex; gap: 10px; }
 .row > * { flex: 1; }
+.course-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.course-row > * { flex: 1 1 140px; }
 .pr-badge { color: var(--accent); font-weight: 800; }
 .error { color: var(--danger); font-size: 13px; margin-top: 6px; }
 .tabbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex;

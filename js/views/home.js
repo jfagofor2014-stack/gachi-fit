@@ -57,7 +57,7 @@ export async function renderHome(el, navigate) {
   const lastTrained = lastTrainedDateByCategory(sets, exById, wkById);
 
   const courseButtons = courses.length
-    ? `<div class="row" style="margin-top:10px">
+    ? `<div class="course-row" style="margin-top:10px">
         ${courses.map((c) => `<button type="button" class="btn btn-primary" data-select-course="${c.id}">${escapeHtml(c.name)}</button>`).join('')}
       </div>`
     : '<p class="muted mt-2">「管理」タブでコースを登録すると、ここから選べます。</p>';
@@ -71,7 +71,7 @@ export async function renderHome(el, navigate) {
         ${showPackBtn ? '<button type="button" id="home-pack-btn" class="btn btn-block" style="margin-top:10px">自宅向けの種目とコースをまとめて追加</button>' : ''}
         ${exercises.length ? `<button type="button" id="ai-course-btn" class="btn btn-block" style="margin-top:10px">AIが今日のコースを提案</button>
         <div id="ai-course-out" style="margin-top:10px"></div>` : ''}
-        <div id="home-msg" class="muted" style="margin-top:8px"></div>
+        ${env === 'home' ? '<div id="home-msg" class="muted" style="margin-top:8px"></div>' : ''}
       </div>`
     : '';
 
@@ -131,7 +131,8 @@ export async function renderHome(el, navigate) {
         const r = await registerHomeCoursePack({ getAll, put, uid, exercisePresets: DEFAULT_EXERCISE_PRESETS });
         // 描き直すとボタンもメッセージも消えるので、描き直したあとにメッセージを入れる
         await renderHome(el, navigate);
-        el.querySelector('#home-msg').textContent = `種目${r.exercises}件・コース${r.courses}件を追加しました`;
+        const m = el.querySelector('#home-msg');
+        if (m) m.textContent = `種目${r.exercises}件・コース${r.courses}件を追加しました`;
       } catch (e) {
         packBtn.disabled = false;
         msg.textContent = '追加できませんでした: ' + e.message;

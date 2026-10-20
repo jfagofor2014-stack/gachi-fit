@@ -300,7 +300,7 @@ export function createSetEntry(el, { exercises, onModeChange }) {
       let i = rowValues.findIndex((rv) => rv.weight === 0 || rv.reps === 0);
       if (i === -1) {
         if (rowValues.length >= MAX_ROWS) return null;
-        rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
+        rowValues.push({ weight: baseWeight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
         i = rowValues.length - 1;
       }
       if (weight !== null && weight !== undefined) {
