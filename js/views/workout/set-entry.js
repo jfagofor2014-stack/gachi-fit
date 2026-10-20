@@ -13,8 +13,8 @@ const SS_MIN_ROUNDS = 1;
 const SS_MAX_ROUNDS = 6;
 const SS_DEFAULT_ROUNDS = 3;
 
-function defaultRowValues(n) {
-  return Array.from({ length: n }, () => ({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }));
+function defaultRowValues(n, weight = 0) {
+  return Array.from({ length: n }, () => ({ weight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }));
 }
 
 export function setEntryHtml() {
@@ -29,6 +29,7 @@ export function setEntryHtml() {
         <button type="button" id="w-voice-btn" class="btn btn-primary voice-btn">🎤 音声で入力</button>
         <div id="w-voice-status" class="muted mt-1"></div>
       </div>
+      <div id="w-bw-hint" class="muted mt-1"></div>
       <div id="w-rows" class="mt-2"></div>
       <div class="row mt-2">
         <button type="button" id="w-row-add" class="btn">＋ 行を追加</button>
@@ -58,6 +59,8 @@ export function createSetEntry(el, { exercises, onModeChange }) {
   let mode = 'normal';
   let rowValues = defaultRowValues(DEFAULT_ROWS);
   let rowSteppers = [];
+  // 自重種目で重量欄に自動入力する体重（0 は自動入力なし）
+  let baseWeight = 0;
 
   const exerciseName = (id) => exercises.find((e) => e.id === id)?.name || '?';
 
@@ -264,8 +267,29 @@ export function createSetEntry(el, { exercises, onModeChange }) {
     resetRows: (keepWeights) => {
       rowValues = keepWeights
         ? rowValues.map((rv) => ({ weight: rv.weight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false }))
-        : defaultRowValues(DEFAULT_ROWS);
+        : defaultRowValues(DEFAULT_ROWS, baseWeight);
       renderRows();
+    },
+    // 自重種目では直近の体重を重量欄に入れる。null / 0 で自動入力を解除する。
+    // 手で変えた重量・音声で明示した重量（weightTouched）は消さない
+    setBaseWeight: (bw) => {
+      syncRowValuesFromSteppers();
+      const next = bw > 0 ? bw : 0;
+      if (baseWeight > 0) {
+        for (const rv of rowValues) {
+          if (rv.weight === baseWeight && !rv.weightTouched) rv.weight = 0;
+        }
+      }
+      if (next > 0) {
+        for (const rv of rowValues) {
+          if (rv.weight === 0) rv.weight = next;
+        }
+      }
+      baseWeight = next;
+      renderRows();
+    },
+    setHint: (text) => {
+      el.querySelector('#w-bw-hint').textContent = text;
     },
     fillNextRow: ({ weight, reps }) => {
       // ステッパーの手入力は明示的に同期するまで rowValues に入らない。
@@ -276,7 +300,7 @@ export function createSetEntry(el, { exercises, onModeChange }) {
       let i = rowValues.findIndex((rv) => rv.weight === 0 || rv.reps === 0);
       if (i === -1) {
         if (rowValues.length >= MAX_ROWS) return null;
-        rowValues.push({ weight: 0, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
+        rowValues.push({ weight: baseWeight, reps: 0, assistedReps: 0, assistOn: false, weightTouched: false });
         i = rowValues.length - 1;
       }
       if (weight !== null && weight !== undefined) {

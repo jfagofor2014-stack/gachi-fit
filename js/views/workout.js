@@ -9,6 +9,8 @@ import { openSetEditor } from './set-editor.js';
 import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/interval-bar.js';
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 import { setEntryHtml, createSetEntry } from './workout/set-entry.js';
+import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
+import { latestBodyWeight } from '../lib/bodyweight.js';
 import { parseSetUtterance } from '../lib/voiceParse.js';
 import { isVoiceSupported, startListening, stopVoiceInput } from '../lib/voice.js';
 
@@ -39,18 +41,26 @@ let voiceSession = null;
 export async function renderWorkout(el, navigate, opts = {}) {
   if (stopVoiceListening) { stopVoiceListening(); stopVoiceListening = null; }
   voiceSession = null;
-  const exercises = await getAll('exercises');
+  const allExercises = await getAll('exercises');
+  const env = getEnv();
+  // 選択・提案には環境で絞った種目、名前の解決（本日のセットなど）には全種目を使う
+  const exercises = visibleExercises(allExercises, env);
   const allSets = await getAll('sets');
   const prs = computePRs(allSets);
   const places = await getAll('places');
-  const courses = await getAll('courses');
+  const courses = (await getAll('courses')).filter((c) => courseAvailable(c, allExercises, env));
+  const bodyWeightNow = latestBodyWeight(await getAll('bodyWeights'));
   const todayWorkout = (await getAll('workouts')).find((w) => w.date === todayStr());
   const defaultSec = parseInt(localStorage.getItem('default_interval_sec') || '90', 10);
   const intervalChoices = [60, 90, 120, 180];
 
   if (!exercises.length) {
+    // 絞り込みで0件になった（登録はある）場合と、そもそも未登録の場合で案内を分ける
+    const msg = allExercises.length
+      ? '自宅でできる種目がありません。ホームの「自宅向けの種目とコースをまとめて追加」を押してください。'
+      : '先に「管理」タブで種目を登録してください。';
     el.innerHTML = `<h2 class="view-title">記録</h2>
-      <div class="card"><p class="muted">先に「管理」タブで種目を登録してください。</p></div>`;
+      <div class="card"><p class="muted">${msg}</p></div>`;
     return;
   }
 
@@ -114,7 +124,17 @@ export async function renderWorkout(el, navigate, opts = {}) {
     setTimeout(() => { el.querySelector('#w-impression-save').textContent = '感想を保存'; }, 1500);
   });
 
-  const exPanel = createExercisePanel(el, { exercises, courses, prs });
+  const exPanel = createExercisePanel(el, {
+    exercises, allExercises, courses, prs,
+    // 自重種目では重量欄に直近の体重を入れる。種目が変わるたびに呼ばれる
+    onExerciseChange: (exId) => {
+      const ex = exercises.find((e) => e.id === exId);
+      const isBodyweight = Boolean(ex && ex.bodyweight);
+      setEntry.setBaseWeight(isBodyweight ? bodyWeightNow : null);
+      setEntry.setHint(isBodyweight && !bodyWeightNow
+        ? '体重が未登録です。重量欄に体重を入力してください' : '');
+    },
+  });
   const setEntry = createSetEntry(el, {
     exercises,
     onModeChange: (m) => {
@@ -174,18 +194,30 @@ export async function renderWorkout(el, navigate, opts = {}) {
         voiceStatus.textContent = `${parsed.exerciseName} に切り替えました`;
         return;
       }
-      const row = setEntry.fillNextRow({ weight: parsed.weight, reps: parsed.reps });
+      const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
+      // 自重種目の「プラス◯キロ」は体重への上乗せ。体重が取れないときは数値をそのまま重量にする
+      let weight = parsed.weight;
+      let weightLabel = parsed.weight !== null ? `${parsed.weight}kg` : null;
+      let tail = '';
+      if (parsed.added && parsed.weight !== null && cur && cur.bodyweight) {
+        if (bodyWeightNow) {
+          weight = Math.round((bodyWeightNow + parsed.weight) * 100) / 100;
+          weightLabel = `体重＋${parsed.weight}kg`;
+        } else {
+          tail = `（体重が未登録のため、${parsed.weight}kgをそのまま入力しました）`;
+        }
+      }
+      const row = setEntry.fillNextRow({ weight, reps: parsed.reps });
       if (row === null) {
         voiceStatus.textContent = '行がいっぱいです。記録してから続けてください';
         return;
       }
-      const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
       const parts = [
         cur ? cur.name : null,
-        parsed.weight !== null ? `${parsed.weight}kg` : null,
+        weightLabel,
         parsed.reps !== null ? `${parsed.reps}回` : null,
       ].filter(Boolean);
-      voiceStatus.textContent = `セット${row + 1}: ${parts.join(' / ')} を入力しました`;
+      voiceStatus.textContent = `セット${row + 1}: ${parts.join(' / ')} を入力しました${tail}`;
     };
 
     const ERROR_TEXT = {
@@ -242,7 +274,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
       const saveBtn = el.querySelector('#w-save');
       saveBtn.textContent = `保存しました（${entries.length}セット）`;
       setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
-      await renderToday(el, exercises);
+      await renderToday(el, allExercises);
       return;
     }
 
@@ -277,11 +309,11 @@ export async function renderWorkout(el, navigate, opts = {}) {
     const saveBtn = el.querySelector('#w-save');
     saveBtn.textContent = `保存しました（${filled.length}セット）`;
     setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
-    await renderToday(el, exercises);
+    await renderToday(el, allExercises);
     await exPanel.refresh();
   });
 
-  await renderToday(el, exercises);
+  await renderToday(el, allExercises);
 
   if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
     exPanel.setCourse(opts.initialCourseId);

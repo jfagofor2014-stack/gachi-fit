@@ -40,10 +40,13 @@ export function parseSetUtterance(text, exerciseNames = []) {
 
   let weight = null;
   let reps = null;
+  let added = false;
 
-  const weightMatch = rest.match(/(\d+(?:\.\d+)?)\s*(?:キロ|㌔|kg)/i);
+  // 重量の直前の「プラス / ＋ / + / 追加」は、体重などへの上乗せを表す
+  const weightMatch = rest.match(/((?:プラス|＋|\+|追加)\s*)?(\d+(?:\.\d+)?)\s*(?:キロ|㌔|kg)/i);
   if (weightMatch) {
-    weight = parseFloat(weightMatch[1]);
+    weight = parseFloat(weightMatch[2]);
+    added = Boolean(weightMatch[1]);
     rest = rest.replace(weightMatch[0], ' ');
   }
 
@@ -60,5 +63,5 @@ export function parseSetUtterance(text, exerciseNames = []) {
     else if (reps === null) reps = parseInt(n, 10);
   }
 
-  return { exerciseName, weight, reps };
+  return { exerciseName, weight, reps, added };
 }

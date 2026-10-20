@@ -1,14 +1,18 @@
 import { getAll, put, remove, uid } from '../db.js';
 import { escapeHtml } from '../lib/html.js';
 import { COURSE_MIN_EX, COURSE_MAX_EX } from '../lib/constants.js';
-import { mostUsedExerciseIds, matchExerciseNamesToIds } from '../lib/courses.js';
-import { DEFAULT_COURSE_PRESETS, missingExerciseNames } from '../lib/coursePresets.js';
+import { mostUsedExerciseIds } from '../lib/courses.js';
+import { DEFAULT_COURSE_PRESETS, registerCoursePreset } from '../lib/coursePresets.js';
 import { DEFAULT_EXERCISE_PRESETS } from '../lib/exercisePresets.js';
+import { getEnv, visibleExercises, courseAvailable, visibleCoursePresets } from '../lib/env.js';
 
 const COURSE_DEFAULT_EX = 4;
 
 export async function renderCourses(el) {
-  const exercises = await getAll('exercises');
+  const allExercises = await getAll('exercises');
+  const env = getEnv();
+  // コース作成の選択肢は環境で絞り、名前の解決には全種目を使う
+  const exercises = visibleExercises(allExercises, env);
   const sets = await getAll('sets');
   let presetBusy = false;
 
@@ -32,7 +36,9 @@ export async function renderCourses(el) {
     </div>`;
 
   if (!exercises.length) {
-    el.querySelector('#course-slots').innerHTML = '<p class="muted">先に種目を登録してください。</p>';
+    el.querySelector('#course-slots').innerHTML = allExercises.length
+      ? '<p class="muted">自宅でできる種目がありません。上のプリセットからコースを作ると、種目も自動で登録されます。</p>'
+      : '<p class="muted">先に種目を登録してください。</p>';
     el.querySelector('#course-save').disabled = true;
     el.querySelector('#course-autofill').disabled = true;
     el.querySelector('#course-slot-add').disabled = true;
@@ -88,8 +94,8 @@ export async function renderCourses(el) {
   });
 
   async function renderCourseList() {
-    const courses = await getAll('courses');
-    const nameOf = (id) => exercises.find((e) => e.id === id)?.name || '?';
+    const courses = (await getAll('courses')).filter((c) => courseAvailable(c, allExercises, env));
+    const nameOf = (id) => allExercises.find((e) => e.id === id)?.name || '?';
     el.querySelector('#course-list').innerHTML = courses.map((c) => `
       <div class="card">
         <div class="list-item" style="border:none;padding:0">
@@ -105,7 +111,7 @@ export async function renderCourses(el) {
   }
 
   function renderPresets() {
-    el.querySelector('#course-presets').innerHTML = DEFAULT_COURSE_PRESETS
+    el.querySelector('#course-presets').innerHTML = visibleCoursePresets(DEFAULT_COURSE_PRESETS, env)
       .map((c) => `<span class="chip chip-tag" data-preset-course="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>`).join('');
     el.querySelectorAll('[data-preset-course]').forEach((chip) =>
       chip.addEventListener('click', () => createFromPreset(chip.dataset.presetCourse)));
@@ -118,26 +124,15 @@ export async function renderCourses(el) {
     el.querySelectorAll('[data-preset-course]').forEach((c) => { c.style.opacity = '0.5'; });
 
     try {
-      // 未登録の種目を種目プリセットから補って登録する
-      const current = await getAll('exercises');
-      const missing = missingExerciseNames(preset.exercises, current);
-      for (const name of missing) {
-        const src = DEFAULT_EXERCISE_PRESETS.find((p) => p.name === name);
-        if (!src) continue;
-        await put('exercises', {
-          id: uid(), name: src.name, bodyPart: src.bodyPart, category: src.category,
-          cuePresets: [], setPattern: '通常',
-        });
-      }
-
-      const after = await getAll('exercises');
-      const exerciseIds = matchExerciseNamesToIds(preset.exercises, after);
-      await put('courses', { id: uid(), name: preset.name, exerciseIds });
+      // 未登録の種目は種目プリセットから補って登録する（homeOk / bodyweight も引き継ぐ）
+      const { added } = await registerCoursePreset(preset, {
+        getAll, put, uid, exercisePresets: DEFAULT_EXERCISE_PRESETS,
+      });
 
       // 画面全体を作り直したあとにメッセージを入れる（再描画で消えないようにするため）
       await renderCourses(el);
-      el.querySelector('#course-preset-msg').textContent = missing.length
-        ? `${preset.name}コースを作成しました（種目${missing.length}件を追加）`
+      el.querySelector('#course-preset-msg').textContent = added
+        ? `${preset.name}コースを作成しました（種目${added}件を追加）`
         : `${preset.name}コースを作成しました`;
     } catch (e) {
       // 失敗時は再描画されないので、チップの見た目を自分で戻して再タップできると伝える
