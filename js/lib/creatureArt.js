@@ -26,7 +26,7 @@ function wrap(inner) {
 function egg(P, sad, mood) {
   const cy = G - 38;
   let s = `<g transform="rotate(${sad ? -9 : 0} ${CX} ${G})">`;
-  if (mood === 'genki') s += `<circle cx="${CX}" cy="${cy}" r="52" fill="#ccff00" opacity=".12"/>`;
+  if (mood === 'genki') s += `<circle cx="${CX}" cy="${cy}" r="48" fill="#ccff00" opacity=".12"/>`;
   s += `<ellipse cx="${CX}" cy="${cy}" rx="30" ry="38" fill="${P.body}"/>`;
   s += `<ellipse cx="${CX - 10}" cy="${cy - 14}" rx="6" ry="11" fill="#fff" opacity=".25"/>`;
   s += `<circle cx="${CX + 12}" cy="${cy + 10}" r="5" fill="${P.shade}"/><circle cx="${CX - 14}" cy="${cy + 18}" r="4" fill="${P.shade}"/><circle cx="${CX + 10}" cy="${cy - 14}" r="3.5" fill="${P.shade}"/>`;
@@ -40,7 +40,7 @@ function egg(P, sad, mood) {
 
 export function monsterSvg(stage, mood) {
   const st = Math.max(0, Math.min(5, Math.round(Number(stage) || 0)));
-  const md = PALETTE[mood] ? mood : 'normal';
+  const md = Object.hasOwn(PALETTE, mood) ? mood : 'normal';
   const P = PALETTE[md];
   const sad = md === 'shobori';
   if (st === 0) return egg(P, sad, md);
@@ -55,7 +55,7 @@ export function monsterSvg(stage, mood) {
 
   // 背景（オーラ・マント）
   if (st === 5 && !sad) {
-    s += `<circle cx="${CX}" cy="${cy}" r="${r + 30}" fill="#ccff00" opacity=".10"/><circle cx="${CX}" cy="${cy}" r="${r + 18}" fill="#ccff00" opacity=".13"/>`;
+    s += `<circle cx="${CX}" cy="${cy}" r="${r + 12}" fill="#ccff00" opacity=".10"/><circle cx="${CX}" cy="${cy}" r="${r + 4}" fill="#ccff00" opacity=".13"/>`;
   }
   if (st === 5) {
     s += `<path d="M${CX - rx + 6} ${cy - r * 0.35} L${CX - rx - 16} ${G - 2} L${CX + rx + 16} ${G - 2} L${CX + rx - 6} ${cy - r * 0.35} Z" fill="${sad ? '#8a4a4d' : '#d9363e'}"/>`;
@@ -121,7 +121,7 @@ export function monsterSvg(stage, mood) {
     s += `<path d="M${CX - r * 0.93} ${cy - r * 0.4} Q${CX} ${cy - r * 0.72} ${CX + r * 0.93} ${cy - r * 0.4} L${CX + r * 0.9} ${cy - r * 0.22} Q${CX} ${cy - r * 0.54} ${CX - r * 0.9} ${cy - r * 0.22} Z" fill="#e5383b"/><path d="M${CX + r * 0.9} ${cy - r * 0.3} l12 -4 l-3 8 l11 3 l-14 2z" fill="#e5383b"/>`;
   }
   if (st === 4) {
-    s += `<path d="M${CX - r * 0.5} ${cy - r * 0.82} L${CX - r * 0.38} ${cy - r * 1.38} L${CX - r * 0.08} ${cy - r * 0.95}Z M${CX - r * 0.2} ${cy - r * 0.95} L${CX} ${cy - r * 1.5} L${CX + r * 0.2} ${cy - r * 0.95}Z M${CX + r * 0.5} ${cy - r * 0.82} L${CX + r * 0.38} ${cy - r * 1.38} L${CX + r * 0.08} ${cy - r * 0.95}Z" fill="${P.shade}"/>`;
+    s += `<path d="M${CX - r * 0.5} ${cy - r * 0.82} L${CX - r * 0.38} ${cy - r * 1.38} L${CX - r * 0.08} ${cy - r * 0.95}Z M${CX - r * 0.2} ${cy - r * 0.95} L${CX} ${cy - r * 1.5} L${CX + r * 0.2} ${cy - r * 0.95}Z M${CX + r * 0.08} ${cy - r * 0.95} L${CX + r * 0.38} ${cy - r * 1.38} L${CX + r * 0.5} ${cy - r * 0.82}Z" fill="${P.shade}"/>`;
   }
   if (st === 5) {
     const base = cy - r * 0.88;
@@ -145,7 +145,7 @@ export function monsterSvg(stage, mood) {
 
   if (sad) {
     s += `<path d="M${CX + r * 0.78} ${cy - r * 0.72} q5 8 0 12 q-5 -4 0 -12z" fill="#7fc8ff"/>`;
-    if (st === 4) s += flatDumbbell(CX - rx - 34, G - 8) + flatDumbbell(CX + rx + 8, G - 8);
+    if (st === 4) s += flatDumbbell(4, G - 8) + flatDumbbell(106, G - 8);
     if (st === 5) {
       s += `<rect x="12" y="${G - 8}" width="116" height="4" rx="2" fill="#bdbdbd"/><rect x="14" y="${G - 16}" width="7" height="20" rx="2" fill="#2b2b2b"/><rect x="119" y="${G - 16}" width="7" height="20" rx="2" fill="#2b2b2b"/>`;
     }
