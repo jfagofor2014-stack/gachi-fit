@@ -19,6 +19,7 @@ import { openPlanEditor } from './plan-editor.js';
 import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
 import { registerHomeCoursePack } from '../lib/coursePresets.js';
 import { DEFAULT_EXERCISE_PRESETS } from '../lib/exercisePresets.js';
+import { renderCreatureCard } from './creature.js';
 
 // renderHome は再入し得る（app.js のタブハンドラが navigate を await しない）ため、
 // 世代カウンタで古い呼び出しの購読を確実に破棄する
@@ -93,6 +94,7 @@ export async function renderHome(el, navigate) {
 
   el.innerHTML = `
     <h2 class="view-title">ホーム</h2>
+    <div id="creature-card"></div>
     ${suggestCard}
     <div id="crew-card"></div>
     <div class="card">
@@ -106,6 +108,9 @@ export async function renderHome(el, navigate) {
       <div style="margin-top:10px">${prRows || '<p class="muted">まだ記録がありません。</p>'}</div>
     </details>
     ${volCard}`;
+
+  renderCreatureCard(el.querySelector('#creature-card'), { workouts, sets, exercises: allExercises })
+    .catch(() => {});
 
   const setWorkoutIds = new Set(sets.map((s) => s.workoutId));
   const trainedDates = new Set(
