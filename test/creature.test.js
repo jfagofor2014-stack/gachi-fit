@@ -338,3 +338,72 @@ test('computeCreature lists the sessions of each week with their minutes', () =>
     { date: '2026-10-09', minutes: 24, qualifies: false },
   ]);
 });
+
+// ---- 境界・補強 ----
+
+test('progressExerciseIds compares reps only against earlier sets at the same or a heavier weight', () => {
+  // 30kg×10 は、より重い 40kg×12 に回数で負ける。比較の向きが逆だと 30kg×8 に勝って誤判定になる
+  const sets = [ds('2026-10-06', 'x', 40, 12), ds('2026-10-06', 'x', 30, 8), ds('2026-10-13', 'x', 30, 10)];
+  assert.deepEqual(progressExerciseIds(sets, [{ id: 'x' }], WS), []);
+});
+
+test('progressExerciseIds needs at least one comparable earlier set for the reps rule', () => {
+  const sets = [ds('2026-10-06', 'x', 20, 30), ds('2026-10-13', 'x', 30, 2)];
+  assert.deepEqual(progressExerciseIds(sets, [{ id: 'x' }], WS), []);
+});
+
+test('progressExerciseIds does not let a lighter high-rep earlier set block the reps rule', () => {
+  // 25kg×15 は 30kg の比較対象に入らない。30kg×5 に対して 30kg×6 は更新
+  const sets = [ds('2026-10-06', 'x', 25, 15), ds('2026-10-06', 'x', 30, 5), ds('2026-10-13', 'x', 30, 6)];
+  assert.deepEqual(progressExerciseIds(sets, [{ id: 'x' }], WS), ['x']);
+});
+
+test('progressExerciseIds applies the body weight tolerance exactly at the boundary', () => {
+  const ex = [{ id: 'bw', bodyweight: true }];
+  assert.deepEqual(progressExerciseIds([ds('2026-10-06', 'bw', 69, 8), ds('2026-10-13', 'bw', 72, 8)], ex, WS), []);
+  assert.deepEqual(progressExerciseIds([ds('2026-10-06', 'bw', 69, 8), ds('2026-10-13', 'bw', 73, 8)], ex, WS), ['bw']);
+});
+
+test('progressExerciseIds ignores sets after the week', () => {
+  const sets = [ds('2026-10-06', 'x', 60, 8), ds('2026-10-13', 'x', 60, 8), ds('2026-10-20', 'x', 90, 8)];
+  assert.deepEqual(progressExerciseIds(sets, [{ id: 'x' }], WS), []);
+});
+
+test('computeCreature normalizes a start week that is not a Monday', () => {
+  const c = run([], { startWeek: '2026-10-07', today: '2026-10-20' });
+  assert.deepEqual(c.weeks.map((w) => w.weekStart), ['2026-10-05', '2026-10-12', '2026-10-19']);
+  assert.equal(c.current.closed, false);
+});
+
+test('computeCreature uses records before the start week as the personal best baseline', () => {
+  const items = [
+    mk('2026-09-29', 40, [{ exerciseId: 'e2', weight: 50, reps: 10 }]),
+    mk('2026-10-06', 40, [{ exerciseId: 'e2', weight: 50, reps: 12 }]), mk('2026-10-08', 40),
+  ];
+  const c = run(items, { startWeek: '2026-10-05', today: '2026-10-12' });
+  assert.deepEqual(c.weeks[0].events, ['e2']);
+  assert.equal(c.weeks[0].delta, 12);
+});
+
+test('computeCreature puts Sunday in its own week and Monday in the next', () => {
+  const c = run([mk('2026-10-11', 40), mk('2026-10-12', 40)], { startWeek: '2026-10-05', today: '2026-10-19' });
+  assert.deepEqual(c.weeks[0].sessions.map((s) => s.date), ['2026-10-11']);
+  assert.deepEqual(c.weeks[1].sessions.map((s) => s.date), ['2026-10-12']);
+});
+
+test('computeCreature can come out ahead in a week with one qualifying day when the bonus is full', () => {
+  const ids = ['e3', 'e4', 'e5'];
+  const items = [
+    mk('2026-10-06', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 10 }))), mk('2026-10-08', 40),
+    mk('2026-10-13', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 11 }))),
+  ];
+  const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
+  assert.equal(c.weeks[1].qualified, 1);
+  assert.equal(c.weeks[1].delta, 1);
+  assert.equal(c.power, 21);
+});
+
+test('computeCreature rejects a malformed date instead of looping forever', () => {
+  assert.throws(() => run([], { startWeek: '2026-10-05', today: '' }), /invalid date/);
+  assert.throws(() => run([], { startWeek: 'abc', today: '2026-10-05' }), /invalid date/);
+});

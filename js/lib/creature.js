@@ -21,6 +21,7 @@ const STAGE_FLOORS = [0, 10, 30, 50, 70, 90];
 const num = (v) => Number(v) || 0;
 
 function parseDate(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr))) throw new Error(`invalid date: ${dateStr}`);
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
@@ -110,12 +111,13 @@ export function progressExerciseIds(datedSets, exercises, weekStartStr) {
   const out = [];
   for (const [id, g] of byExercise) {
     if (!g.prior.length || !g.week.length) continue;
-    const tol = bodyweightIds.has(id) ? BW_TOLERANCE : 0;
+    const isBodyweight = bodyweightIds.has(id);
+    const tol = isBodyweight ? BW_TOLERANCE : 0;
     const priorBest = Math.max(...g.prior.map(oneRM));
     const priorMaxWeight = Math.max(...g.prior.map((p) => num(p.weight)));
     // (a) 推定1RMの更新。自重種目は、ウェイトを足したときだけ有効（体重の増減を成長と誤判定しない）
     const improved1RM = g.week.some((s) =>
-      oneRM(s) > priorBest && (tol === 0 || num(s.weight) > priorMaxWeight + tol));
+      oneRM(s) > priorBest && (!isBodyweight || num(s.weight) > priorMaxWeight + tol));
     // (b) 同じ重量以上での最大回数の更新
     const improvedReps = g.week.some((s) => {
       const comparable = g.prior.filter((p) => num(p.weight) >= num(s.weight) - tol);
@@ -149,7 +151,8 @@ export function computeCreature({ workouts, sets, exercises, startWeek, restWeek
   const sessionsAll = buildSessions(workouts, sets);
   const rest = new Set(restWeeks);
   const currentWeek = weekStart(today);
-  const first = startWeek <= currentWeek ? startWeek : currentWeek;
+  const start = weekStart(startWeek);
+  const first = start <= currentWeek ? start : currentWeek;
 
   const weeks = [];
   let power = START_POWER;
