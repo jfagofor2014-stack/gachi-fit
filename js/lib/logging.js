@@ -1,5 +1,6 @@
 // 1セットずつ記録するための計算（すべて純粋関数）。
 // セットの並び（ドロップの連なりは1スロット）、今のセットの初期値、前回の値、ドロップの下げ幅を扱う。
+import { addDays } from './creature.js';
 
 const num = (v) => Number(v) || 0;
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -75,4 +76,47 @@ export function parseNumberInput(text) {
   const n = parseFloat(half);
   if (!Number.isFinite(n) || n < 0) return 0;
   return round2(n);
+}
+
+// today を含む直近 days 日のセット数を種目ごとに数える
+export function exerciseUsage(sets, workouts, today, days = 28) {
+  const from = addDays(today, -(days - 1));
+  const dateOf = new Map(workouts.map((w) => [w.id, w.date]));
+  const usage = new Map();
+  for (const s of sets) {
+    const date = dateOf.get(s.workoutId);
+    if (date === undefined || date < from || date > today) continue;
+    usage.set(s.exerciseId, (usage.get(s.exerciseId) || 0) + 1);
+  }
+  return usage;
+}
+
+// よく使う順（同数は名前順）。元の配列は変えない
+export function sortByUsage(exercises, usage) {
+  return [...exercises].sort((a, b) =>
+    (usage.get(b.id) || 0) - (usage.get(a.id) || 0) || String(a.name).localeCompare(String(b.name), 'ja'));
+}
+
+// 次にやる種目の提案。コースがあればその順、なければ今の種目を前回やった日の順
+export function suggestNext({ courseIds, currentExerciseId, doneTodayIds, sets, workouts, today, availableIds }) {
+  const done = new Set(doneTodayIds);
+  const available = new Set(availableIds);
+  const ok = (id) => id !== currentExerciseId && !done.has(id) && available.has(id);
+  if (courseIds && courseIds.length) return courseIds.find(ok) || null;
+
+  const dateOf = new Map(workouts.map((w) => [w.id, w.date]));
+  const dated = sets
+    .map((s) => ({ s, date: dateOf.get(s.workoutId) }))
+    .filter(({ date }) => date !== undefined && date < today);
+  const lastDate = dated.filter(({ s }) => s.exerciseId === currentExerciseId)
+    .map(({ date }) => date).sort().pop();
+  if (!lastDate) return null;
+  const firstAt = new Map();
+  for (const { s, date } of dated) {
+    if (date !== lastDate) continue;
+    const t = num(s.createdAt);
+    if (!firstAt.has(s.exerciseId) || t < firstAt.get(s.exerciseId)) firstAt.set(s.exerciseId, t);
+  }
+  const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
+  return order.slice(order.indexOf(currentExerciseId) + 1).find(ok) || null;
 }

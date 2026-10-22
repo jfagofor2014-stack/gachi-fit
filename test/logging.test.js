@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight, parseNumberInput,
+  exerciseUsage, sortByUsage, suggestNext,
 } from '../js/lib/logging.js';
 
 const set = (id, exerciseId, workoutId, weight, reps, createdAt, extra = {}) =>
@@ -70,4 +71,33 @@ test('parseNumberInput accepts decimals and full-width digits, rejects junk and 
   assert.equal(parseNumberInput('abc'), 0);
   assert.equal(parseNumberInput('-5'), 0);
   assert.equal(parseNumberInput('62.556'), 62.56);
+});
+
+test('exerciseUsage counts sets in the last 28 days including today', () => {
+  const workouts = [{ id: 'a', date: '2026-10-23' }, { id: 'b', date: '2026-09-26' }, { id: 'c', date: '2026-09-25' }];
+  const s = [set('1', 'e1', 'a', 1, 1, 1), set('2', 'e1', 'a', 1, 1, 2), set('3', 'e2', 'b', 1, 1, 3), set('4', 'e3', 'c', 1, 1, 4)];
+  const u = exerciseUsage(s, workouts, '2026-10-23');
+  assert.equal(u.get('e1'), 2);
+  assert.equal(u.get('e2'), 1);
+  assert.equal(u.get('e3') || 0, 0);
+});
+test('sortByUsage orders by count then name without mutating input', () => {
+  const ex = [{ id: 'x', name: 'ダンベルフライ' }, { id: 'y', name: 'ディップス' }, { id: 'z', name: 'アーノルドプレス' }];
+  const out = sortByUsage(ex, new Map([['y', 3]]));
+  assert.deepEqual(out.map((e) => e.id), ['y', 'z', 'x']);
+  assert.equal(ex[0].id, 'x');
+});
+test('suggestNext follows the course order, skipping done, current and unavailable ids', () => {
+  const base = { sets: [], workouts: [], today: '2026-10-23', availableIds: ['a', 'b', 'c'] };
+  assert.equal(suggestNext({ ...base, courseIds: ['a', 'b', 'c'], currentExerciseId: 'a', doneTodayIds: ['a'] }), 'b');
+  assert.equal(suggestNext({ ...base, courseIds: ['a', 'gone', 'c'], currentExerciseId: 'a', doneTodayIds: ['a'] }), 'c');
+  assert.equal(suggestNext({ ...base, courseIds: ['a', 'b'], currentExerciseId: 'b', doneTodayIds: ['a', 'b'] }), null);
+});
+test('suggestNext without a course follows the order of the last day the current exercise was done', () => {
+  const workouts = [{ id: 'old', date: '2026-10-08' }, { id: 'w', date: '2026-10-15' }];
+  const s = [set('1', 'a', 'w', 1, 1, 10), set('2', 'b', 'w', 1, 1, 20), set('3', 'c', 'w', 1, 1, 30), set('4', 'a', 'old', 1, 1, 1), set('5', 'x', 'old', 1, 1, 2)];
+  const args = { courseIds: [], currentExerciseId: 'a', sets: s, workouts, today: '2026-10-23', availableIds: ['a', 'b', 'c', 'x'] };
+  assert.equal(suggestNext({ ...args, doneTodayIds: ['a'] }), 'b');
+  assert.equal(suggestNext({ ...args, doneTodayIds: ['a', 'b'] }), 'c');
+  assert.equal(suggestNext({ ...args, currentExerciseId: 'zzz', doneTodayIds: [] }), null);
 });
