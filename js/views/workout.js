@@ -3,12 +3,17 @@ import { estimate1RM, computePRs } from '../lib/calc.js';
 import { formatMinutes } from '../lib/duration.js';
 import { durationMinutes } from '../lib/timerange.js';
 import { localDateStr } from '../lib/localdate.js';
-import { groupConsecutiveSets, flattenRounds } from '../lib/groupSets.js';
+import { groupConsecutiveSets } from '../lib/groupSets.js';
 import { escapeHtml } from '../lib/html.js';
 import { openSetEditor } from './set-editor.js';
-import { intervalSecsHtml, intervalBarHtml, initIntervalBar } from './workout/interval-bar.js';
+import { intervalSecsHtml, intervalBarHtml, initIntervalBar, startRest } from './workout/interval-bar.js';
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
-import { setEntryHtml, createSetEntry } from './workout/set-entry.js';
+import { currentSetHtml, createCurrentSet } from './workout/current-set.js';
+import { toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight,
+  exerciseUsage, sortByUsage, suggestNext, openDropChain } from '../lib/logging.js';
+import { openExerciseSheet } from './workout/exercise-sheet.js';
+import { getWeightStep } from '../lib/prefs.js';
+import { loadLogState, saveLogState } from '../lib/logState.js';
 import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
 import { latestBodyWeight } from '../lib/bodyweight.js';
 import { parseSetUtterance } from '../lib/voiceParse.js';
@@ -66,8 +71,8 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   el.innerHTML = `
     <h2 class="view-title">記録</h2>
-    ${exerciseHeaderHtml(courses)}
-    ${setEntryHtml()}
+    ${exerciseHeaderHtml()}
+    ${currentSetHtml()}
 
     <details class="card fold">
       <summary><strong>本日のセット</strong></summary>
@@ -124,39 +129,238 @@ export async function renderWorkout(el, navigate, opts = {}) {
     setTimeout(() => { el.querySelector('#w-impression-save').textContent = '感想を保存'; }, 1500);
   });
 
-  const exPanel = createExercisePanel(el, {
-    exercises, allExercises, courses, prs,
-    // 自重種目では重量欄に直近の体重を入れる。種目が変わるたびに呼ばれる
-    onExerciseChange: (exId) => {
-      const ex = exercises.find((e) => e.id === exId);
-      const isBodyweight = Boolean(ex && ex.bodyweight);
-      setEntry.setBaseWeight(isBodyweight ? bodyWeightNow : null);
-      setEntry.setHint(isBodyweight && !bodyWeightNow
-        ? '体重が未登録です。重量欄に体重を入力してください' : '');
-    },
-  });
-  const setEntry = createSetEntry(el, {
-    exercises,
-    onModeChange: (m) => {
-      el.querySelector('#w-ex-header').style.display = m === 'superset' ? 'none' : 'block';
-      // 音声ブロックは隠れるだけなので、聞いたままだと結果が隠れた行に入ってしまう。
-      // 停止に合わせてボタンの状態も戻さないと「聞いています…」のまま残り、
-      // 通常モードに戻したあとの最初のタップが空振りする
-      if (m === 'superset') {
-        stopVoiceInput();
-        voiceSession = null;
-        stopVoiceListening = null;
-        const vb = el.querySelector('#w-voice-btn');
-        if (vb) vb.textContent = '🎤 音声で入力';
-      }
-      if (m !== 'superset') exPanel.refresh();
-    },
-  });
-  initIntervalBar(el, defaultSec);
-  await exPanel.refresh();
-  setEntry.applyMode('normal');
+  // ---- 1セットずつ記録する ----
+  const today = todayStr();
+  let workouts = await getAll('workouts');
+  let todayWorkoutId = todayWorkout ? todayWorkout.id : null;
+  const logState = loadLogState(today);
+  let currentExId = null;
+  let busy = false;
 
-  // 音声入力(未対応環境ではボタンごと出さない)
+  const exById = (id) => allExercises.find((e) => e.id === id);
+  const todaySetsOf = (exId) => (todayWorkoutId
+    ? allSets.filter((s) => s.workoutId === todayWorkoutId && s.exerciseId === exId) : []);
+  const dropActiveFor = (exId) => Boolean(logState.drop && logState.drop.exerciseId === exId);
+  // 組の種目がすべて選べるときだけスーパーセットとして扱う（削除・絞り込みで欠けたら組を解く）
+  const supersetActive = () => Boolean(logState.superset
+    && logState.superset.exerciseIds.every((id) => exercises.some((e) => e.id === id)));
+  const closeDrop = () => { if (logState.drop) { logState.drop = null; saveLogState(logState); } };
+
+  // 種目が決まったら、今日の札・前回の値・初期値でカードを作り直す
+  function loadCard(exId) {
+    currentExId = exId;
+    const ex = exById(exId);
+    const isBodyweight = Boolean(ex && ex.bodyweight);
+    const todaySlots = toSlots(todaySetsOf(exId));
+    const lastSlots = lastSessionSlots(allSets, workouts, exId, today);
+    card.setChips(todaySlots);
+    card.setError('');
+    // 連なりのセットが消されていたら連なりを閉じ、残っていれば位置を数え直す
+    const chain = dropActiveFor(exId) ? openDropChain(todaySetsOf(exId), logState.drop) : [];
+    if (dropActiveFor(exId) && chain.length !== logState.drop.dropIndex) {
+      if (chain.length) logState.drop.dropIndex = chain.length;
+      else logState.drop = null;
+      saveLogState(logState);
+    }
+    if (dropActiveFor(exId)) {
+      const last = chain[chain.length - 1];
+      card.setValues({
+        weight: nextDropWeight({ currentWeight: last.weight, dropIndex: logState.drop.dropIndex,
+          lastChain: lastDropChain(allSets, workouts, exId, today), step: getWeightStep() }),
+        reps: last.reps,
+      });
+      card.setHeading(`セット${todaySlots.length}・ドロップ${logState.drop.dropIndex}`);
+      card.setMode({ showDrop: true, showAssist: false });
+    } else {
+      if (dropActiveFor(exId)) closeDrop();
+      card.setValues(initialSetValues({ todaySlots, lastSlots, bodyWeight: bodyWeightNow, isBodyweight }));
+      const n = todaySlots.length + 1;
+      const prev = previousForSet(lastSlots, n);
+      card.setHeading(prev ? `セット${n}（前回 ${prev.weight}kg×${prev.reps}）` : `セット${n}`);
+      card.setMode({ showDrop: !supersetActive(), showAssist: true });
+    }
+    card.setHint(isBodyweight && !bodyWeightNow ? '体重が未登録です。重量欄に体重を入力してください' : '');
+  }
+
+  async function record(isDrop) {
+    if (busy || !currentExId) return;
+    const v = card.values();
+    if (!(v.weight > 0) || !(v.reps > 0)) { card.setError('重量と回数を入れてください'); return; }
+    const assisted = dropActiveFor(currentExId) || isDrop ? 0 : v.assistedReps;
+    if (assisted > v.reps) { card.setError('補助回数は回数以下にしてください'); return; }
+    busy = true;
+    card.setBusy(true);
+    card.setError('');
+    let saved = false;
+    try {
+      const workout = await patchTodayWorkout();
+      todayWorkoutId = workout.id;
+      if (!workouts.some((w) => w.id === workout.id)) workouts = [...workouts, workout];
+      const set = {
+        id: uid(), workoutId: workout.id, exerciseId: currentExId, weight: v.weight, reps: v.reps,
+        assistedReps: assisted, estimated1RM: estimate1RM(v.weight, v.reps - assisted),
+        targetWeight: prs[currentExId] || null, createdAt: Date.now(),
+      };
+      const ss = supersetActive() ? logState.superset : null;
+      if (ss) {
+        set.groupId = ss.groupId; set.groupType = 'superset';
+      } else if (dropActiveFor(currentExId)) {
+        set.groupId = logState.drop.groupId; set.groupType = 'dropset';
+      } else if (isDrop) {
+        logState.drop = { exerciseId: currentExId, groupId: uid(), dropIndex: 0 };
+        set.groupId = logState.drop.groupId; set.groupType = 'dropset';
+      }
+      await put('sets', set);
+      allSets.push(set);
+      saved = true;
+      // メモの保存や画面の更新で失敗しても、セットは保存済み。「保存できませんでした」とは出さない
+      try { await put('sensoryLogs', { id: uid(), setId: set.id, note: v.note }); } catch { /* メモだけ失う */ }
+      const est = set.estimated1RM;
+      if (!(prs[currentExId] >= est)) prs[currentExId] = est;
+      card.clearDetails();
+      if (ss) {
+        // 組の次の種目へ。組の最後を記録したら休憩に入り、最初の種目へ戻る
+        const next = (ss.index + 1) % ss.exerciseIds.length;
+        if (next === 0) startRest();
+        ss.index = next;
+        saveLogState(logState);
+        goTo(ss.exerciseIds[next]);
+      } else if (isDrop) {
+        logState.drop.dropIndex += 1;
+        saveLogState(logState);
+        loadCard(currentExId);
+      } else {
+        closeDrop();
+        startRest();
+        loadCard(currentExId);
+      }
+      await renderToday(el, allExercises, reloadAfterEdit);
+      await exPanel.refresh();
+    } catch (e) {
+      if (!saved) {
+        // 札は増やさない
+        if (isDrop && logState.drop && logState.drop.dropIndex === 0) closeDrop();
+        if (el.isConnected) card.setError('保存できませんでした: ' + e.message);
+      }
+    } finally {
+      busy = false;
+      card.setBusy(false);
+    }
+  }
+
+  // 札や「本日のセット」で編集・削除したら、DBから読み直して描き直す
+  async function reloadAfterEdit() {
+    allSets.splice(0, allSets.length, ...(await getAll('sets')));
+    Object.assign(prs, computePRs(allSets));
+    loadCard(currentExId);
+    await renderToday(el, allExercises, reloadAfterEdit);
+    await exPanel.refresh();
+  }
+
+  const card = createCurrentSet(el, {
+    getStep: getWeightStep,
+    onRecord: () => record(false),
+    onDrop: () => record(true),
+    onChipTap: (setId) => openSetEditor(setId, reloadAfterEdit),
+  });
+
+  const exPanel = createExercisePanel(el, { allExercises, prs, onOpen: () => openSheet() });
+
+  // シート・音声・コースから種目を切り替える
+  function goTo(exId) {
+    loadCard(exId);
+    exPanel.setExercise(exId);
+  }
+
+  function switchExercise(exId) {
+    if (!exId || exId === currentExId) return;
+    if (logState.drop && logState.drop.exerciseId !== exId) closeDrop();
+    if (logState.superset) {
+      const i = logState.superset.exerciseIds.indexOf(exId);
+      if (i === -1) dissolveSuperset(false);
+      else { logState.superset.index = i; saveLogState(logState); }
+    }
+    goTo(exId);
+  }
+
+  function startSuperset(ids) {
+    closeDrop();
+    logState.superset = { exerciseIds: ids, index: 0, groupId: uid() };
+    saveLogState(logState);
+    showContext();
+    goTo(ids[0]);
+  }
+
+  function dissolveSuperset(reload = true) {
+    logState.superset = null;
+    saveLogState(logState);
+    showContext();
+    if (reload && currentExId) loadCard(currentExId);
+  }
+
+  const visibleIds = () => exercises.map((e) => e.id);
+  const doneTodayIds = () => [...new Set(todayWorkoutId
+    ? allSets.filter((s) => s.workoutId === todayWorkoutId).map((s) => s.exerciseId) : [])];
+  const firstCourseExercise = () => logState.courseIds.find((id) =>
+    visibleIds().includes(id) && !doneTodayIds().includes(id)) || null;
+  const showContext = () => exPanel.setContext({
+    courseName: logState.courseIds.length ? logState.courseName : '',
+    supersetNames: supersetActive() ? logState.superset.exerciseIds.map((id) => exById(id).name) : [],
+    onDissolve: () => dissolveSuperset(),
+  });
+
+  function setCourse({ courseIds, courseName }) {
+    logState.courseIds = courseIds;
+    logState.courseName = courseName;
+    saveLogState(logState);
+    showContext();
+  }
+
+  function openSheet() {
+    openExerciseSheet({
+      exercises,
+      usage: exerciseUsage(allSets, workouts, today),
+      currentExerciseId: currentExId,
+      suggestionId: suggestNext({
+        courseIds: logState.courseIds, currentExerciseId: currentExId, doneTodayIds: doneTodayIds(),
+        sets: allSets, workouts, today, availableIds: visibleIds(),
+      }),
+      courses,
+      logState,
+      onPick: switchExercise,
+      onCourse: setCourse,
+      onStartSuperset: startSuperset,
+    });
+  }
+
+  // ホームのコースボタン・AIの提案から来たら、今日だけのコースとして持つ
+  if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
+    const c = courses.find((x) => x.id === opts.initialCourseId);
+    setCourse({ courseIds: c.exerciseIds, courseName: c.name });
+  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
+    setCourse({ courseIds: opts.initialExerciseIds.filter((id) => visibleIds().includes(id)), courseName: 'AIおすすめ' });
+  }
+  showContext();
+
+  // 開いたときの種目: 続いているドロップの種目 → ホームから来たコースの最初の未実施 → 今日最後に記録した種目
+  // → コースの最初の未実施 → よく使う種目。先頭の種目で開くと、続いていたドロップの連なりが途切れてしまう
+  const lastToday = todayWorkoutId
+    ? allSets.filter((s) => s.workoutId === todayWorkoutId && visibleIds().includes(s.exerciseId))
+      .sort((a, b) => b.createdAt - a.createdAt)[0]
+    : null;
+  const fromHome = opts.initialCourseId || (opts.initialExerciseIds && opts.initialExerciseIds.length);
+  if (logState.superset && !supersetActive()) { logState.superset = null; saveLogState(logState); }
+  const startExId =
+    (supersetActive() ? logState.superset.exerciseIds[logState.superset.index] || logState.superset.exerciseIds[0] : null)
+    || (logState.drop && visibleIds().includes(logState.drop.exerciseId) ? logState.drop.exerciseId : null)
+    || (fromHome ? firstCourseExercise() : null)
+    || (lastToday ? lastToday.exerciseId : null)
+    || firstCourseExercise()
+    || sortByUsage(exercises, exerciseUsage(allSets, workouts, today))[0].id;
+  initIntervalBar(el, defaultSec);
+  switchExercise(startExId);
+
+  // 音声入力(未対応環境ではボタンごと出さない)。今のセットを埋めるだけで保存はしない
   if (isVoiceSupported()) {
     const voiceBox = el.querySelector('#w-voice');
     const voiceBtn = el.querySelector('#w-voice-btn');
@@ -176,25 +380,13 @@ export async function renderWorkout(el, navigate, opts = {}) {
       }
       if (parsed.exerciseName) {
         const ex = exercises.find((e) => e.name === parsed.exerciseName);
-        if (ex && ex.id !== exPanel.currentExerciseId()) {
-          // 行は種目に紐づかず保存時に一括スタンプされるため、未保存の入力が
-          // 残ったまま種目を変えると前の種目の記録が新しい種目として保存されてしまう
-          setEntry.syncFromSteppers();
-          const pending = setEntry.rows().some((rv) => rv.weight > 0 && rv.reps > 0);
-          if (pending) {
-            const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
-            voiceStatus.textContent =
-              `${cur ? cur.name : '前の種目'}の入力が残っています。先に「まとめて記録」を押してください`;
-            return;
-          }
-        }
-        if (ex) exPanel.selectExercise(ex.id);
+        if (ex) switchExercise(ex.id);
       }
       if (parsed.weight === null && parsed.reps === null) {
         voiceStatus.textContent = `${parsed.exerciseName} に切り替えました`;
         return;
       }
-      const cur = exercises.find((e) => e.id === exPanel.currentExerciseId());
+      const cur = exById(currentExId);
       // 自重種目の「プラス◯キロ」は体重への上乗せ。体重が取れないときは数値をそのまま重量にする
       let weight = parsed.weight;
       let weightLabel = parsed.weight !== null ? `${parsed.weight}kg` : null;
@@ -207,17 +399,9 @@ export async function renderWorkout(el, navigate, opts = {}) {
           tail = `（体重が未登録のため、${parsed.weight}kgをそのまま入力しました）`;
         }
       }
-      const row = setEntry.fillNextRow({ weight, reps: parsed.reps });
-      if (row === null) {
-        voiceStatus.textContent = '行がいっぱいです。記録してから続けてください';
-        return;
-      }
-      const parts = [
-        cur ? cur.name : null,
-        weightLabel,
-        parsed.reps !== null ? `${parsed.reps}回` : null,
-      ].filter(Boolean);
-      voiceStatus.textContent = `セット${row + 1}: ${parts.join(' / ')} を入力しました${tail}`;
+      card.setValues({ weight, reps: parsed.reps });
+      const parts = [cur ? cur.name : null, weightLabel, parsed.reps !== null ? `${parsed.reps}回` : null].filter(Boolean);
+      voiceStatus.textContent = `${parts.join(' / ')} を入力しました。「記録する」で保存します${tail}`;
     };
 
     const ERROR_TEXT = {
@@ -246,85 +430,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
     });
   }
 
-  // まとめて記録
-  el.querySelector('#w-save').addEventListener('click', async () => {
-    const err = el.querySelector('#w-error');
-    err.textContent = '';
-
-    if (setEntry.mode() === 'superset') {
-      setEntry.syncFromSteppers();
-      const entries = flattenRounds(setEntry.ssExerciseIds(), setEntry.ssRounds());
-      if (!entries.length) { err.textContent = '少なくとも1セット入力してください'; return; }
-      const workout = await patchTodayWorkout();
-      const note = el.querySelector('#w-note').value;
-      const groupId = uid();
-      const base = Date.now();
-      let i = 0;
-      for (const en of entries) {
-        const est = estimate1RM(en.weight, en.reps);
-        const setId = uid();
-        await put('sets', { id: setId, workoutId: workout.id, exerciseId: en.exerciseId, weight: en.weight, reps: en.reps,
-          assistedReps: 0, estimated1RM: est, targetWeight: prs[en.exerciseId] || null, createdAt: base + i,
-          groupId, groupType: 'superset' });
-        await put('sensoryLogs', { id: uid(), setId, note });
-        i++;
-      }
-      el.querySelector('#w-note').value = '';
-      setEntry.resetSuperset();
-      const saveBtn = el.querySelector('#w-save');
-      saveBtn.textContent = `保存しました（${entries.length}セット）`;
-      setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
-      await renderToday(el, allExercises);
-      return;
-    }
-
-    setEntry.syncFromSteppers();
-    const rowValues = setEntry.rows();
-    const filled = rowValues.filter((rv) => rv.weight > 0 && rv.reps > 0);
-    if (!filled.length) { err.textContent = '少なくとも1セット入力してください'; return; }
-    for (const rv of rowValues) {
-      if (rv.weight > 0 && rv.reps > 0 && rv.assistedReps > rv.reps) {
-        err.textContent = '補助回数は回数以下にしてください'; return;
-      }
-    }
-    const exerciseId = exPanel.currentExerciseId();
-    const workout = await patchTodayWorkout();
-    const note = el.querySelector('#w-note').value;
-    const isDropset = setEntry.mode() === 'dropset';
-    const groupId = isDropset ? uid() : undefined;
-    const base = Date.now();
-    let i = 0;
-    for (const rv of filled) {
-      const est = estimate1RM(rv.weight, rv.reps - rv.assistedReps);
-      const setId = uid();
-      const set = { id: setId, workoutId: workout.id, exerciseId, weight: rv.weight, reps: rv.reps,
-        assistedReps: rv.assistedReps, estimated1RM: est, targetWeight: prs[exerciseId] || null, createdAt: base + i };
-      if (isDropset) { set.groupId = groupId; set.groupType = 'dropset'; }
-      await put('sets', set);
-      await put('sensoryLogs', { id: uid(), setId, note });
-      i++;
-    }
-    el.querySelector('#w-note').value = '';
-    setEntry.resetRows(isDropset);
-    const saveBtn = el.querySelector('#w-save');
-    saveBtn.textContent = `保存しました（${filled.length}セット）`;
-    setTimeout(() => { saveBtn.textContent = 'まとめて記録'; }, 1500);
-    await renderToday(el, allExercises);
-    await exPanel.refresh();
-  });
-
-  await renderToday(el, allExercises);
-
-  if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
-    exPanel.setCourse(opts.initialCourseId);
-    exPanel.openPicker();
-  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
-    const validIds = opts.initialExerciseIds.filter((id) => exercises.some((e) => e.id === id));
-    if (validIds.length) { exPanel.showExerciseButtons(validIds); exPanel.openPicker(); }
-  }
+  await renderToday(el, allExercises, reloadAfterEdit);
 }
 
-async function renderToday(el, exercises) {
+async function renderToday(el, exercises, onChanged) {
   const today = localDateStr();
   const workouts = await getAll('workouts');
   const workout = workouts.find((w) => w.date === today);
@@ -352,13 +461,13 @@ async function renderToday(el, exercises) {
   ).join('') || '<p class="muted">まだ記録なし</p>';
 
   box.querySelectorAll('[data-edit]').forEach((b) =>
-    b.addEventListener('click', () => openSetEditor(b.dataset.edit, () => renderToday(el, exercises))));
+    b.addEventListener('click', () => openSetEditor(b.dataset.edit, () => (onChanged ? onChanged() : renderToday(el, exercises)))));
   box.querySelectorAll('[data-del]').forEach((b) =>
     b.addEventListener('click', async () => {
       const setId = b.dataset.del;
       await remove('sets', setId);
       const allLogs = await getAll('sensoryLogs');
       for (const l of allLogs.filter((l) => l.setId === setId)) await remove('sensoryLogs', l.id);
-      renderToday(el, exercises);
+      if (onChanged) onChanged(); else renderToday(el, exercises);
     }));
 }

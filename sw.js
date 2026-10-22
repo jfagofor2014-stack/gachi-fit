@@ -1,10 +1,10 @@
-const CACHE = 'gachi-fit-v28';
+const CACHE = 'gachi-fit-v29';
 const ASSETS = [
   '.', 'index.html', 'css/style.css',
   'js/app.js', 'js/db.js', 'js/timer.js',
   'js/lib/calc.js', 'js/lib/chart.js',
-  'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js', 'js/lib/duration.js', 'js/lib/calendar.js', 'js/lib/localdate.js', 'js/lib/timerange.js', 'js/lib/volume.js', 'js/lib/obsidian.js', 'js/lib/sound.js', 'js/lib/exercisePresets.js', 'js/lib/groupSets.js', 'js/lib/suggest.js', 'js/lib/courses.js', 'js/lib/html.js', 'js/lib/constants.js', 'js/lib/coursePresets.js', 'js/lib/plans.js', 'js/lib/crew.js', 'js/lib/firebase-config.js', 'js/lib/env.js', 'js/lib/exerciseMeta.js', 'js/lib/bodyweight.js', 'js/lib/voiceParse.js', 'js/lib/voice.js', 'js/lib/creature.js', 'js/lib/creatureArt.js',
-  'js/views/home.js', 'js/views/workout.js', 'js/views/workout/interval-bar.js', 'js/views/workout/exercise-panel.js', 'js/views/workout/set-entry.js', 'js/views/exercises.js', 'js/views/analysis.js',
+  'js/lib/gemini.js', 'js/lib/countdown.js', 'js/lib/seed.js', 'js/lib/image.js', 'js/lib/duration.js', 'js/lib/calendar.js', 'js/lib/localdate.js', 'js/lib/timerange.js', 'js/lib/volume.js', 'js/lib/obsidian.js', 'js/lib/sound.js', 'js/lib/exercisePresets.js', 'js/lib/groupSets.js', 'js/lib/suggest.js', 'js/lib/courses.js', 'js/lib/html.js', 'js/lib/constants.js', 'js/lib/coursePresets.js', 'js/lib/plans.js', 'js/lib/crew.js', 'js/lib/firebase-config.js', 'js/lib/env.js', 'js/lib/exerciseMeta.js', 'js/lib/bodyweight.js', 'js/lib/voiceParse.js', 'js/lib/voice.js', 'js/lib/creature.js', 'js/lib/logging.js', 'js/lib/prefs.js', 'js/lib/logState.js', 'js/lib/creatureArt.js',
+  'js/views/home.js', 'js/views/workout.js', 'js/views/workout/interval-bar.js', 'js/views/workout/exercise-panel.js', 'js/views/workout/current-set.js', 'js/views/workout/exercise-sheet.js', 'js/views/exercises.js', 'js/views/analysis.js',
   'js/views/history.js', 'js/views/insights.js', 'js/views/settings.js',
   'js/views/body.js', 'js/views/components.js', 'js/views/set-editor.js', 'js/views/plan-editor.js', 'js/views/calendar.js',
   'js/views/manage.js', 'js/views/courses.js', 'js/views/places.js', 'js/views/creature.js',
