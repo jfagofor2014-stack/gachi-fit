@@ -58,13 +58,16 @@ export function createExercisePanel(el, { allExercises, prs, onOpen }) {
     setExercise(id) { currentId = id; return refresh(); },
     currentExerciseId: () => currentId,
     // ヘッダーにコース名と、スーパーセットの組（A ⇄ B）を出す
-    setContext({ courseName, supersetNames }) {
+    setContext({ courseName, supersetNames, onDissolve }) {
       const box = el.querySelector('#w-ex-course');
-      const parts = [];
-      if (supersetNames && supersetNames.length) parts.push(`スーパーセット: ${supersetNames.map(escapeHtml).join(' ⇄ ')}`);
-      else if (courseName) parts.push(`コース: ${escapeHtml(courseName)}`);
-      box.innerHTML = parts.join('');
-      box.hidden = parts.length === 0;
+      if (supersetNames && supersetNames.length) {
+        box.innerHTML = `スーパーセット: ${supersetNames.map(escapeHtml).join(' ⇄ ')}
+          <button type="button" class="btn ss-dissolve" id="w-ss-dissolve">組を解く</button>`;
+        box.querySelector('#w-ss-dissolve').addEventListener('click', () => onDissolve && onDissolve());
+      } else {
+        box.innerHTML = courseName ? `コース: ${escapeHtml(courseName)}` : '';
+      }
+      box.hidden = box.innerHTML === '';
     },
   };
 }

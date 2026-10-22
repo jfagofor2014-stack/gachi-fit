@@ -141,6 +141,9 @@ export async function renderWorkout(el, navigate, opts = {}) {
   const todaySetsOf = (exId) => (todayWorkoutId
     ? allSets.filter((s) => s.workoutId === todayWorkoutId && s.exerciseId === exId) : []);
   const dropActiveFor = (exId) => Boolean(logState.drop && logState.drop.exerciseId === exId);
+  // 組の種目がすべて選べるときだけスーパーセットとして扱う（削除・絞り込みで欠けたら組を解く）
+  const supersetActive = () => Boolean(logState.superset
+    && logState.superset.exerciseIds.every((id) => exercises.some((e) => e.id === id)));
   const closeDrop = () => { if (logState.drop) { logState.drop = null; saveLogState(logState); } };
 
   // 種目が決まったら、今日の札・前回の値・初期値でカードを作り直す
@@ -168,7 +171,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
       const n = todaySlots.length + 1;
       const prev = previousForSet(lastSlots, n);
       card.setHeading(prev ? `セット${n}（前回 ${prev.weight}kg×${prev.reps}）` : `セット${n}`);
-      card.setMode({ showDrop: true, showAssist: true });
+      card.setMode({ showDrop: !supersetActive(), showAssist: true });
     }
     card.setHint(isBodyweight && !bodyWeightNow ? '体重が未登録です。重量欄に体重を入力してください' : '');
   }
@@ -191,7 +194,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
         assistedReps: assisted, estimated1RM: estimate1RM(v.weight, v.reps - assisted),
         targetWeight: prs[currentExId] || null, createdAt: Date.now(),
       };
-      if (dropActiveFor(currentExId)) {
+      const ss = supersetActive() ? logState.superset : null;
+      if (ss) {
+        set.groupId = ss.groupId; set.groupType = 'superset';
+      } else if (dropActiveFor(currentExId)) {
         set.groupId = logState.drop.groupId; set.groupType = 'dropset';
       } else if (isDrop) {
         logState.drop = { exerciseId: currentExId, groupId: uid(), dropIndex: 0 };
@@ -202,15 +208,23 @@ export async function renderWorkout(el, navigate, opts = {}) {
       allSets.push(set);
       const est = set.estimated1RM;
       if (!(prs[currentExId] >= est)) prs[currentExId] = est;
-      if (isDrop) {
+      card.clearDetails();
+      if (ss) {
+        // 組の次の種目へ。組の最後を記録したら休憩に入り、最初の種目へ戻る
+        const next = (ss.index + 1) % ss.exerciseIds.length;
+        if (next === 0) startRest();
+        ss.index = next;
+        saveLogState(logState);
+        goTo(ss.exerciseIds[next]);
+      } else if (isDrop) {
         logState.drop.dropIndex += 1;
         saveLogState(logState);
+        loadCard(currentExId);
       } else {
         closeDrop();
         startRest();
+        loadCard(currentExId);
       }
-      card.clearDetails();
-      loadCard(currentExId);
       await renderToday(el, allExercises, reloadAfterEdit);
       await exPanel.refresh();
     } catch (e) {
@@ -242,11 +256,35 @@ export async function renderWorkout(el, navigate, opts = {}) {
   const exPanel = createExercisePanel(el, { allExercises, prs, onOpen: () => openSheet() });
 
   // シート・音声・コースから種目を切り替える
+  function goTo(exId) {
+    loadCard(exId);
+    exPanel.setExercise(exId);
+  }
+
   function switchExercise(exId) {
     if (!exId || exId === currentExId) return;
     if (logState.drop && logState.drop.exerciseId !== exId) closeDrop();
-    loadCard(exId);
-    exPanel.setExercise(exId);
+    if (logState.superset) {
+      const i = logState.superset.exerciseIds.indexOf(exId);
+      if (i === -1) dissolveSuperset(false);
+      else { logState.superset.index = i; saveLogState(logState); }
+    }
+    goTo(exId);
+  }
+
+  function startSuperset(ids) {
+    closeDrop();
+    logState.superset = { exerciseIds: ids, index: 0, groupId: uid() };
+    saveLogState(logState);
+    showContext();
+    goTo(ids[0]);
+  }
+
+  function dissolveSuperset(reload = true) {
+    logState.superset = null;
+    saveLogState(logState);
+    showContext();
+    if (reload && currentExId) loadCard(currentExId);
   }
 
   const visibleIds = () => exercises.map((e) => e.id);
@@ -254,7 +292,11 @@ export async function renderWorkout(el, navigate, opts = {}) {
     ? allSets.filter((s) => s.workoutId === todayWorkoutId).map((s) => s.exerciseId) : [])];
   const firstCourseExercise = () => logState.courseIds.find((id) =>
     visibleIds().includes(id) && !doneTodayIds().includes(id)) || null;
-  const showContext = () => exPanel.setContext({ courseName: logState.courseIds.length ? logState.courseName : '' });
+  const showContext = () => exPanel.setContext({
+    courseName: logState.courseIds.length ? logState.courseName : '',
+    supersetNames: supersetActive() ? logState.superset.exerciseIds.map((id) => exById(id).name) : [],
+    onDissolve: () => dissolveSuperset(),
+  });
 
   function setCourse({ courseIds, courseName }) {
     logState.courseIds = courseIds;
@@ -276,7 +318,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
       logState,
       onPick: switchExercise,
       onCourse: setCourse,
-      onStartSuperset: () => {},
+      onStartSuperset: startSuperset,
     });
   }
 
@@ -296,8 +338,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
       .sort((a, b) => b.createdAt - a.createdAt)[0]
     : null;
   const fromHome = opts.initialCourseId || (opts.initialExerciseIds && opts.initialExerciseIds.length);
+  if (logState.superset && !supersetActive()) { logState.superset = null; saveLogState(logState); }
   const startExId =
-    (logState.drop && visibleIds().includes(logState.drop.exerciseId) ? logState.drop.exerciseId : null)
+    (supersetActive() ? logState.superset.exerciseIds[logState.superset.index] || logState.superset.exerciseIds[0] : null)
+    || (logState.drop && visibleIds().includes(logState.drop.exerciseId) ? logState.drop.exerciseId : null)
     || (fromHome ? firstCourseExercise() : null)
     || (lastToday ? lastToday.exerciseId : null)
     || firstCourseExercise()
