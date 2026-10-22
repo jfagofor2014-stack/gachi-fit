@@ -120,3 +120,10 @@ export function suggestNext({ courseIds, currentExerciseId, doneTodayIds, sets, 
   const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
   return order.slice(order.indexOf(currentExerciseId) + 1).find(ok) || null;
 }
+
+// 続いているドロップの連なりの、保存済みセット（時刻順）。空なら連なりは終わっている（押し間違いを消した場合など）
+export function openDropChain(todaySets, drop) {
+  if (!drop) return [];
+  return todaySets.filter((s) => s.groupId === drop.groupId)
+    .sort((a, b) => num(a.createdAt) - num(b.createdAt));
+}

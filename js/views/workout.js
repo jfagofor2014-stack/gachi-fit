@@ -10,7 +10,7 @@ import { intervalSecsHtml, intervalBarHtml, initIntervalBar, startRest } from '.
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 import { currentSetHtml, createCurrentSet } from './workout/current-set.js';
 import { toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight,
-  exerciseUsage, sortByUsage, suggestNext } from '../lib/logging.js';
+  exerciseUsage, sortByUsage, suggestNext, openDropChain } from '../lib/logging.js';
 import { openExerciseSheet } from './workout/exercise-sheet.js';
 import { getWeightStep } from '../lib/prefs.js';
 import { loadLogState, saveLogState } from '../lib/logState.js';
@@ -155,9 +155,15 @@ export async function renderWorkout(el, navigate, opts = {}) {
     const lastSlots = lastSessionSlots(allSets, workouts, exId, today);
     card.setChips(todaySlots);
     card.setError('');
-    if (dropActiveFor(exId) && todaySlots.length) {
-      const sets = todaySetsOf(exId).sort((a, b) => a.createdAt - b.createdAt);
-      const last = sets[sets.length - 1];
+    // 連なりのセットが消されていたら連なりを閉じ、残っていれば位置を数え直す
+    const chain = dropActiveFor(exId) ? openDropChain(todaySetsOf(exId), logState.drop) : [];
+    if (dropActiveFor(exId) && chain.length !== logState.drop.dropIndex) {
+      if (chain.length) logState.drop.dropIndex = chain.length;
+      else logState.drop = null;
+      saveLogState(logState);
+    }
+    if (dropActiveFor(exId)) {
+      const last = chain[chain.length - 1];
       card.setValues({
         weight: nextDropWeight({ currentWeight: last.weight, dropIndex: logState.drop.dropIndex,
           lastChain: lastDropChain(allSets, workouts, exId, today), step: getWeightStep() }),
@@ -185,6 +191,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
     busy = true;
     card.setBusy(true);
     card.setError('');
+    let saved = false;
     try {
       const workout = await patchTodayWorkout();
       todayWorkoutId = workout.id;
@@ -204,8 +211,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
         set.groupId = logState.drop.groupId; set.groupType = 'dropset';
       }
       await put('sets', set);
-      await put('sensoryLogs', { id: uid(), setId: set.id, note: v.note });
       allSets.push(set);
+      saved = true;
+      // メモの保存や画面の更新で失敗しても、セットは保存済み。「保存できませんでした」とは出さない
+      try { await put('sensoryLogs', { id: uid(), setId: set.id, note: v.note }); } catch { /* メモだけ失う */ }
       const est = set.estimated1RM;
       if (!(prs[currentExId] >= est)) prs[currentExId] = est;
       card.clearDetails();
@@ -228,9 +237,11 @@ export async function renderWorkout(el, navigate, opts = {}) {
       await renderToday(el, allExercises, reloadAfterEdit);
       await exPanel.refresh();
     } catch (e) {
-      // 札は増やさない。保存できたかどうかは「本日のセット」で確かめられる
-      if (isDrop && logState.drop && logState.drop.dropIndex === 0) closeDrop();
-      card.setError('保存できませんでした: ' + e.message);
+      if (!saved) {
+        // 札は増やさない
+        if (isDrop && logState.drop && logState.drop.dropIndex === 0) closeDrop();
+        if (el.isConnected) card.setError('保存できませんでした: ' + e.message);
+      }
     } finally {
       busy = false;
       card.setBusy(false);

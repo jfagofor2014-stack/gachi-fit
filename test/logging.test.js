@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight, parseNumberInput,
-  exerciseUsage, sortByUsage, suggestNext,
+  exerciseUsage, sortByUsage, suggestNext, openDropChain,
 } from '../js/lib/logging.js';
 
 const set = (id, exerciseId, workoutId, weight, reps, createdAt, extra = {}) =>
@@ -100,4 +100,15 @@ test('suggestNext without a course follows the order of the last day the current
   assert.equal(suggestNext({ ...args, doneTodayIds: ['a'] }), 'b');
   assert.equal(suggestNext({ ...args, doneTodayIds: ['a', 'b'] }), 'c');
   assert.equal(suggestNext({ ...args, currentExerciseId: 'zzz', doneTodayIds: [] }), null);
+});
+
+test('openDropChain returns the saved sets of the open chain in time order', () => {
+  const g = { groupId: 'g1', groupType: 'dropset' };
+  const sets = [set('b', 'e', 'w', 20, 6, 2, g), set('x', 'e', 'w', 26, 10, 0), set('a', 'e', 'w', 26, 10, 1, g)];
+  assert.deepEqual(openDropChain(sets, { exerciseId: 'e', groupId: 'g1', dropIndex: 2 }).map((s) => s.id), ['a', 'b']);
+});
+test('openDropChain is empty once every set of the chain was deleted', () => {
+  const sets = [set('x', 'e', 'w', 26, 10, 0)];
+  assert.deepEqual(openDropChain(sets, { exerciseId: 'e', groupId: 'g1', dropIndex: 1 }), []);
+  assert.deepEqual(openDropChain(sets, null), []);
 });
