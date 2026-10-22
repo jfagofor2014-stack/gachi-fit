@@ -2,6 +2,8 @@ import { createTimer, formatTime } from '../../timer.js';
 import { shouldBeep, shouldFinalBeep, playBeep } from '../../lib/sound.js';
 
 let intervalTimer;
+// 今の秒数設定（startRest から使う）
+let restState = null;
 
 // 折りたたみ内に置く秒数セグメント
 export function intervalSecsHtml(choices, defaultSec) {
@@ -23,6 +25,7 @@ export function intervalBarHtml(defaultSec) {
 export function initIntervalBar(el, defaultSec) {
   if (intervalTimer) intervalTimer.stop();
   const state = { interval: defaultSec };
+  restState = state;
   const timerEl = el.querySelector('#w-timer');
 
   el.querySelectorAll('#w-int-secs button').forEach((b) =>
@@ -47,4 +50,11 @@ export function initIntervalBar(el, defaultSec) {
     intervalTimer.stop();
     timerEl.textContent = formatTime(state.interval);
   });
+}
+
+// セットを記録したときに休憩タイマーを始める（動いていれば最初から）
+export function startRest() {
+  if (!intervalTimer || !restState) return;
+  intervalTimer.stop();
+  intervalTimer.start(restState.interval);
 }

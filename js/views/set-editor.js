@@ -1,4 +1,4 @@
-import { get, getAll, put, uid } from '../db.js';
+import { get, getAll, put, remove, uid } from '../db.js';
 import { estimate1RM } from '../lib/calc.js';
 import { escapeHtml } from '../lib/html.js';
 import { createStepper } from './components.js';
@@ -23,7 +23,8 @@ export async function openSetEditor(setId, onDone) {
     <div class="field"><label>メモ</label><input id="e-note" class="input" value="${escapeHtml(log.note || '')}" /></div>
     <div id="e-error" class="error"></div>
     <button id="e-save" class="btn btn-primary btn-block">保存</button>
-    <button id="e-cancel" class="btn btn-block" style="margin-top:8px">キャンセル</button>`;
+    <button id="e-cancel" class="btn btn-block" style="margin-top:8px">キャンセル</button>
+    <button id="e-delete" class="btn btn-danger btn-block" style="margin-top:16px">このセットを削除</button>`;
   document.body.appendChild(modal);
 
   const weightStepper = createStepper(modal.querySelector('#e-weight'), { value: set.weight, step: 0.5, min: 0 });
@@ -42,6 +43,13 @@ export async function openSetEditor(setId, onDone) {
   });
 
   modal.querySelector('#e-cancel').addEventListener('click', () => modal.remove());
+  modal.querySelector('#e-delete').addEventListener('click', async () => {
+    if (!confirm('このセットを削除しますか？')) return;
+    await remove('sets', setId);
+    for (const l of logs.filter((x) => x.setId === setId)) await remove('sensoryLogs', l.id);
+    modal.remove();
+    onDone && onDone();
+  });
   modal.querySelector('#e-save').addEventListener('click', async () => {
     const weight = weightStepper.get();
     const reps = repsStepper.get();
