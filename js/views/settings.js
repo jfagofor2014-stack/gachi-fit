@@ -2,6 +2,7 @@ import { exportAll, importAll, getAll, put, remove, uid, get } from '../db.js';
 import { localDateStr } from '../lib/localdate.js';
 import { escapeHtml } from '../lib/html.js';
 import { isCrewConfigured, watchAuth, signIn, signOutCrew } from '../lib/crew.js';
+import { WEIGHT_STEPS, getWeightStep, setWeightStep } from '../lib/prefs.js';
 
 // 管理タブのセグメント切替で renderSettings が呼び直されるため、
 // 世代カウンタで古い購読を確実に破棄する
@@ -25,6 +26,14 @@ export async function renderSettings(el) {
       <p class="muted">記録タブのインターバルの初期値。</p>
       <input id="s-int" type="number" class="input" value="${localStorage.getItem('default_interval_sec') || '90'}" min="1" max="600" />
       <button id="s-int-save" class="btn btn-primary btn-block" style="margin-top:10px">秒数を保存</button>
+    </div>
+
+    <div class="card">
+      <strong>重量の刻み（kg）</strong>
+      <p class="muted">記録タブの重量の −／＋ で変わる量。</p>
+      <div class="seg" id="s-step">
+        ${WEIGHT_STEPS.map((v) => `<button type="button" data-step="${v}" class="${v === getWeightStep() ? 'sel' : ''}">${v}</button>`).join('')}
+      </div>
     </div>
 
     <div class="card">
@@ -69,6 +78,12 @@ export async function renderSettings(el) {
       <button id="s-import" class="btn btn-block">インポート</button>
       <div id="s-msg" class="muted" style="margin-top:10px"></div>
     </div>`;
+
+  el.querySelectorAll('#s-step button').forEach((b) =>
+    b.addEventListener('click', () => {
+      setWeightStep(Number(b.dataset.step));
+      el.querySelectorAll('#s-step button').forEach((x) => x.classList.toggle('sel', Number(x.dataset.step) === getWeightStep()));
+    }));
 
   el.querySelector('#s-int-save').addEventListener('click', () => {
     const v = parseInt(el.querySelector('#s-int').value, 10);
