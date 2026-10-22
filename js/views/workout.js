@@ -9,7 +9,9 @@ import { openSetEditor } from './set-editor.js';
 import { intervalSecsHtml, intervalBarHtml, initIntervalBar, startRest } from './workout/interval-bar.js';
 import { exerciseHeaderHtml, createExercisePanel } from './workout/exercise-panel.js';
 import { currentSetHtml, createCurrentSet } from './workout/current-set.js';
-import { toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight } from '../lib/logging.js';
+import { toSlots, lastSessionSlots, initialSetValues, previousForSet, lastDropChain, nextDropWeight,
+  exerciseUsage, sortByUsage, suggestNext } from '../lib/logging.js';
+import { openExerciseSheet } from './workout/exercise-sheet.js';
 import { getWeightStep } from '../lib/prefs.js';
 import { loadLogState, saveLogState } from '../lib/logState.js';
 import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
@@ -69,7 +71,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   el.innerHTML = `
     <h2 class="view-title">記録</h2>
-    ${exerciseHeaderHtml(courses)}
+    ${exerciseHeaderHtml()}
     ${currentSetHtml()}
 
     <details class="card fold">
@@ -237,38 +239,71 @@ export async function renderWorkout(el, navigate, opts = {}) {
     onChipTap: (setId) => openSetEditor(setId, reloadAfterEdit),
   });
 
-  const exPanel = createExercisePanel(el, {
-    exercises, allExercises, courses, prs,
-    // 種目が変わったときだけカードを作り直す（記録後の再描画では作り直さない）
-    onExerciseChange: (exId) => {
-      if (exId === currentExId) return;
-      if (logState.drop && logState.drop.exerciseId !== exId) closeDrop();
-      loadCard(exId);
-    },
-  });
+  const exPanel = createExercisePanel(el, { allExercises, prs, onOpen: () => openSheet() });
 
-  // 音声・コースのボタンなどから種目を切り替える
+  // シート・音声・コースから種目を切り替える
   function switchExercise(exId) {
-    if (exId === currentExId) return;
+    if (!exId || exId === currentExId) return;
     if (logState.drop && logState.drop.exerciseId !== exId) closeDrop();
     loadCard(exId);
-    exPanel.selectExercise(exId);
+    exPanel.setExercise(exId);
   }
 
-  initIntervalBar(el, defaultSec);
-  // 開いたときの種目: 続いているドロップの種目 → 今日最後に記録した種目 → 一覧の先頭。
-  // 先頭の種目で開くと、続いていたドロップの連なりが途切れてしまう
+  const visibleIds = () => exercises.map((e) => e.id);
+  const doneTodayIds = () => [...new Set(todayWorkoutId
+    ? allSets.filter((s) => s.workoutId === todayWorkoutId).map((s) => s.exerciseId) : [])];
+  const firstCourseExercise = () => logState.courseIds.find((id) =>
+    visibleIds().includes(id) && !doneTodayIds().includes(id)) || null;
+  const showContext = () => exPanel.setContext({ courseName: logState.courseIds.length ? logState.courseName : '' });
+
+  function setCourse({ courseIds, courseName }) {
+    logState.courseIds = courseIds;
+    logState.courseName = courseName;
+    saveLogState(logState);
+    showContext();
+  }
+
+  function openSheet() {
+    openExerciseSheet({
+      exercises,
+      usage: exerciseUsage(allSets, workouts, today),
+      currentExerciseId: currentExId,
+      suggestionId: suggestNext({
+        courseIds: logState.courseIds, currentExerciseId: currentExId, doneTodayIds: doneTodayIds(),
+        sets: allSets, workouts, today, availableIds: visibleIds(),
+      }),
+      courses,
+      logState,
+      onPick: switchExercise,
+      onCourse: setCourse,
+      onStartSuperset: () => {},
+    });
+  }
+
+  // ホームのコースボタン・AIの提案から来たら、今日だけのコースとして持つ
+  if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
+    const c = courses.find((x) => x.id === opts.initialCourseId);
+    setCourse({ courseIds: c.exerciseIds, courseName: c.name });
+  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
+    setCourse({ courseIds: opts.initialExerciseIds.filter((id) => visibleIds().includes(id)), courseName: 'AIおすすめ' });
+  }
+  showContext();
+
+  // 開いたときの種目: 続いているドロップの種目 → ホームから来たコースの最初の未実施 → 今日最後に記録した種目
+  // → コースの最初の未実施 → よく使う種目。先頭の種目で開くと、続いていたドロップの連なりが途切れてしまう
   const lastToday = todayWorkoutId
-    ? allSets.filter((s) => s.workoutId === todayWorkoutId && exercises.some((e) => e.id === s.exerciseId))
+    ? allSets.filter((s) => s.workoutId === todayWorkoutId && visibleIds().includes(s.exerciseId))
       .sort((a, b) => b.createdAt - a.createdAt)[0]
     : null;
-  const resumeExId = (logState.drop && exercises.some((e) => e.id === logState.drop.exerciseId))
-    ? logState.drop.exerciseId : (lastToday ? lastToday.exerciseId : null);
-  if (resumeExId) {
-    loadCard(resumeExId);
-    exPanel.selectExercise(resumeExId);
-  }
-  await exPanel.refresh();
+  const fromHome = opts.initialCourseId || (opts.initialExerciseIds && opts.initialExerciseIds.length);
+  const startExId =
+    (logState.drop && visibleIds().includes(logState.drop.exerciseId) ? logState.drop.exerciseId : null)
+    || (fromHome ? firstCourseExercise() : null)
+    || (lastToday ? lastToday.exerciseId : null)
+    || firstCourseExercise()
+    || sortByUsage(exercises, exerciseUsage(allSets, workouts, today))[0].id;
+  initIntervalBar(el, defaultSec);
+  switchExercise(startExId);
 
   // 音声入力(未対応環境ではボタンごと出さない)。今のセットを埋めるだけで保存はしない
   if (isVoiceSupported()) {
@@ -341,14 +376,6 @@ export async function renderWorkout(el, navigate, opts = {}) {
   }
 
   await renderToday(el, allExercises, reloadAfterEdit);
-
-  if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
-    exPanel.setCourse(opts.initialCourseId);
-    exPanel.openPicker();
-  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
-    const validIds = opts.initialExerciseIds.filter((id) => exercises.some((e) => e.id === id));
-    if (validIds.length) { exPanel.showExerciseButtons(validIds); exPanel.openPicker(); }
-  }
 }
 
 async function renderToday(el, exercises, onChanged) {
