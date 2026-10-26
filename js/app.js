@@ -4,7 +4,6 @@ import { renderAnalysis } from './views/analysis.js';
 import { renderManage } from './views/manage.js';
 import { getAll, put, uid } from './db.js';
 import { ensureDefaultSetPatterns } from './lib/seed.js';
-import { stopVoiceInput } from './lib/voice.js';
 import { ensureExerciseMeta } from './lib/exerciseMeta.js';
 import { DEFAULT_EXERCISE_PRESETS } from './lib/exercisePresets.js';
 import { getEnv, setEnv } from './lib/env.js';
@@ -24,7 +23,6 @@ let currentRoute = 'home';
 async function navigate(route, opts) {
   currentRoute = route;
   const el = document.getElementById('view');
-  stopVoiceInput();
   document.querySelectorAll('.tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.route === route && TAB_ROUTES.includes(route)));
   document.body.classList.toggle('has-interval-bar', route === 'workout');

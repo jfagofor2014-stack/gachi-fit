@@ -16,8 +16,6 @@ import { getWeightStep } from '../lib/prefs.js';
 import { loadLogState, saveLogState } from '../lib/logState.js';
 import { getEnv, visibleExercises, courseAvailable } from '../lib/env.js';
 import { latestBodyWeight } from '../lib/bodyweight.js';
-import { parseSetUtterance } from '../lib/voiceParse.js';
-import { isVoiceSupported, startListening, stopVoiceInput } from '../lib/voice.js';
 
 const todayStr = () => localDateStr();
 
@@ -38,14 +36,7 @@ function patchTodayWorkout(patch = {}) {
   return run;
 }
 
-// renderWorkout 1回分のローカル変数に持つと、タブを離れたあとも認識が止まらず
-// 古いコールバックが別画面のDOMを触って例外になる（interval-bar.js と同じ方式で防ぐ）
-let stopVoiceListening = null;
-let voiceSession = null;
-
 export async function renderWorkout(el, navigate, opts = {}) {
-  if (stopVoiceListening) { stopVoiceListening(); stopVoiceListening = null; }
-  voiceSession = null;
   const allExercises = await getAll('exercises');
   const env = getEnv();
   // 選択・提案には環境で絞った種目、名前の解決（本日のセットなど）には全種目を使う
@@ -266,7 +257,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
 
   const exPanel = createExercisePanel(el, { allExercises, prs, onOpen: () => openSheet() });
 
-  // シート・音声・コースから種目を切り替える
+  // シート・コースから種目を切り替える
   function goTo(exId) {
     loadCard(exId);
     exPanel.setExercise(exId);
@@ -333,12 +324,10 @@ export async function renderWorkout(el, navigate, opts = {}) {
     });
   }
 
-  // ホームのコースボタン・AIの提案から来たら、今日だけのコースとして持つ
+  // ホームのコースボタンから来たら、今日だけのコースとして持つ
   if (opts.initialCourseId && courses.some((c) => c.id === opts.initialCourseId)) {
     const c = courses.find((x) => x.id === opts.initialCourseId);
     setCourse({ courseIds: c.exerciseIds, courseName: c.name });
-  } else if (Array.isArray(opts.initialExerciseIds) && opts.initialExerciseIds.length) {
-    setCourse({ courseIds: opts.initialExerciseIds.filter((id) => visibleIds().includes(id)), courseName: 'AIおすすめ' });
   }
   showContext();
 
@@ -348,7 +337,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
     ? allSets.filter((s) => s.workoutId === todayWorkoutId && visibleIds().includes(s.exerciseId))
       .sort((a, b) => b.createdAt - a.createdAt)[0]
     : null;
-  const fromHome = opts.initialCourseId || (opts.initialExerciseIds && opts.initialExerciseIds.length);
+  const fromHome = Boolean(opts.initialCourseId);
   if (logState.superset && !supersetActive()) { logState.superset = null; saveLogState(logState); }
   const startExId =
     (supersetActive() ? logState.superset.exerciseIds[logState.superset.index] || logState.superset.exerciseIds[0] : null)
@@ -359,76 +348,6 @@ export async function renderWorkout(el, navigate, opts = {}) {
     || sortByUsage(exercises, exerciseUsage(allSets, workouts, today))[0].id;
   initIntervalBar(el, defaultSec);
   switchExercise(startExId);
-
-  // 音声入力(未対応環境ではボタンごと出さない)。今のセットを埋めるだけで保存はしない
-  if (isVoiceSupported()) {
-    const voiceBox = el.querySelector('#w-voice');
-    const voiceBtn = el.querySelector('#w-voice-btn');
-    const voiceStatus = el.querySelector('#w-voice-status');
-    voiceBox.style.display = 'block';
-
-    const idle = () => {
-      voiceBtn.textContent = '🎤 音声で入力';
-      stopVoiceListening = null;
-    };
-
-    const applyUtterance = (text) => {
-      const parsed = parseSetUtterance(text, exercises.map((e) => e.name));
-      if (parsed.exerciseName === null && parsed.weight === null && parsed.reps === null) {
-        voiceStatus.textContent = '聞き取れませんでした';
-        return;
-      }
-      if (parsed.exerciseName) {
-        const ex = exercises.find((e) => e.name === parsed.exerciseName);
-        if (ex) switchExercise(ex.id);
-      }
-      if (parsed.weight === null && parsed.reps === null) {
-        voiceStatus.textContent = `${parsed.exerciseName} に切り替えました`;
-        return;
-      }
-      const cur = exById(currentExId);
-      // 自重種目の「プラス◯キロ」は体重への上乗せ。体重が取れないときは数値をそのまま重量にする
-      let weight = parsed.weight;
-      let weightLabel = parsed.weight !== null ? `${parsed.weight}kg` : null;
-      let tail = '';
-      if (parsed.added && parsed.weight !== null && cur && cur.bodyweight) {
-        if (bodyWeightNow) {
-          weight = Math.round((bodyWeightNow + parsed.weight) * 100) / 100;
-          weightLabel = `体重＋${parsed.weight}kg`;
-        } else {
-          tail = `（体重が未登録のため、${parsed.weight}kgをそのまま入力しました）`;
-        }
-      }
-      card.setValues({ weight, reps: parsed.reps });
-      const parts = [cur ? cur.name : null, weightLabel, parsed.reps !== null ? `${parsed.reps}回` : null].filter(Boolean);
-      voiceStatus.textContent = `${parts.join(' / ')} を入力しました。「記録する」で保存します${tail}`;
-    };
-
-    const ERROR_TEXT = {
-      'not-allowed': 'マイクの使用を許可してください',
-      'service-not-allowed': 'マイクの使用を許可してください',
-      'audio-capture': 'マイクを利用できません',
-      'no-speech': '聞き取れませんでした',
-      network: '通信できませんでした。手入力で記録できます',
-    };
-
-    voiceBtn.addEventListener('click', () => {
-      if (stopVoiceListening) { stopVoiceListening(); idle(); return; }
-      voiceStatus.textContent = '';
-      voiceBtn.textContent = '聞いています…';
-      const session = {};
-      voiceSession = session;
-      stopVoiceListening = startListening({
-        onInterim: (t) => { if (voiceSession !== session) return; voiceStatus.textContent = t; },
-        onResult: (t) => { if (voiceSession !== session) return; idle(); applyUtterance(t); },
-        onError: (code) => {
-          if (voiceSession !== session) return;
-          idle();
-          voiceStatus.textContent = ERROR_TEXT[code] || '認識できませんでした';
-        },
-      });
-    });
-  }
 
   await renderToday(el, allExercises, reloadAfterEdit);
 }

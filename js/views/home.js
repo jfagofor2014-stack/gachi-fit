@@ -3,16 +3,12 @@ import { computePRs } from '../lib/calc.js';
 import { daysUntil } from '../lib/countdown.js';
 import { formatMinutes } from '../lib/duration.js';
 import { escapeHtml } from '../lib/html.js';
-import { BODY_PARTS, COURSE_MAX_EX } from '../lib/constants.js';
 import { renderCalendar } from './calendar.js';
 import { openSetEditor } from './set-editor.js';
 import { localDateStr } from '../lib/localdate.js';
-import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression, categoriesWithExercises } from '../lib/volume.js';
+import { maxCategoryVolumeWithDate, categoryVolumeForDate, categoryKey, setVolume, VOLUME_START_DATE, dailyCategoryVolumes, categoryPRProgression } from '../lib/volume.js';
 import { workoutToMarkdown, buildObsidianUri, downloadText } from '../lib/obsidian.js';
 import { stepPath } from '../lib/chart.js';
-import { lastTrainedDateByCategory } from '../lib/suggest.js';
-import { matchExerciseNamesToIds } from '../lib/courses.js';
-import { buildCourseSuggestionPrompt, parseCourseSuggestion, callGemini } from '../lib/gemini.js';
 import { upcomingPlans, groupPlansByDate, canEditPlan } from '../lib/plans.js';
 import { watchAuth, watchPlans } from '../lib/crew.js';
 import { openPlanEditor } from './plan-editor.js';
@@ -54,8 +50,6 @@ export async function renderHome(el, navigate) {
   const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
 
   const courses = (await getAll('courses')).filter((c) => courseAvailable(c, allExercises, env));
-  const suggestCategories = categoriesWithExercises(exercises, BODY_PARTS);
-  const lastTrained = lastTrainedDateByCategory(sets, exById, wkById);
 
   const courseButtons = courses.length
     ? `<div class="course-row" style="margin-top:10px">
@@ -70,8 +64,6 @@ export async function renderHome(el, navigate) {
         <strong>お帰りなさい。今日はどんなトレーニングをしますか？</strong>
         ${courseButtons}
         ${showPackBtn ? '<button type="button" id="home-pack-btn" class="btn btn-block" style="margin-top:10px">自宅向けの種目とコースをまとめて追加</button>' : ''}
-        ${exercises.length ? `<button type="button" id="ai-course-btn" class="btn btn-block" style="margin-top:10px">AIが今日のコースを提案</button>
-        <div id="ai-course-out" style="margin-top:10px"></div>` : ''}
         ${env === 'home' ? '<div id="home-msg" class="muted" style="margin-top:8px"></div>' : ''}
       </div>`
     : '';
@@ -141,55 +133,6 @@ export async function renderHome(el, navigate) {
       } catch (e) {
         packBtn.disabled = false;
         msg.textContent = '追加できませんでした: ' + e.message;
-      }
-    });
-  }
-
-  const aiCourseBtn = el.querySelector('#ai-course-btn');
-  if (aiCourseBtn) {
-    aiCourseBtn.addEventListener('click', async () => {
-      const out = el.querySelector('#ai-course-out');
-      const key = localStorage.getItem('gemini_api_key') || '';
-      if (!key) { out.innerHTML = '<p class="muted">設定でGemini APIキーを登録してください。</p>'; return; }
-      out.innerHTML = '<p class="muted">提案中…</p>';
-      try {
-        const gaps = suggestCategories
-          .filter((c) => c !== 'その他')
-          .map((cat) => ({ cat, date: lastTrained[cat] }))
-          .map(({ cat, date }) => ({ category: cat, days: date ? -daysUntil(date) : null }));
-        const prompt = buildCourseSuggestionPrompt({
-          exercises: exercises.map((e) => ({ name: e.name, bodyPart: e.bodyPart })),
-          gaps,
-        });
-        const text = await callGemini(prompt, key, {});
-        const names = parseCourseSuggestion(text);
-        const matchedIds = matchExerciseNamesToIds(names, exercises).slice(0, COURSE_MAX_EX);
-        if (!matchedIds.length) {
-          out.innerHTML = '<p class="muted">AIの提案を解析できませんでした。もう一度お試しください。</p>';
-          return;
-        }
-        const now = new Date();
-        const defaultName = `AIおすすめ ${now.getMonth() + 1}/${now.getDate()}`;
-        out.innerHTML = `
-          <div class="muted">${matchedIds.map((id) => escapeHtml(nameOf(id))).join('、')}</div>
-          <div class="field" style="margin-top:8px"><label>コース名</label>
-            <input id="ai-course-name" class="input" value="${escapeHtml(defaultName)}" /></div>
-          <div class="row" style="margin-top:8px">
-            <button type="button" id="ai-course-go" class="btn btn-primary">この内容で記録する</button>
-            <button type="button" id="ai-course-save" class="btn">この内容でコース保存</button>
-          </div>
-          <div id="ai-course-save-msg" class="muted" style="margin-top:6px"></div>`;
-        out.querySelector('#ai-course-go').addEventListener('click', () =>
-          navigate('workout', { initialExerciseIds: matchedIds }));
-        out.querySelector('#ai-course-save').addEventListener('click', async () => {
-          const name = out.querySelector('#ai-course-name').value.trim();
-          const msg = out.querySelector('#ai-course-save-msg');
-          if (!name) { msg.textContent = 'コース名を入力してください'; return; }
-          await put('courses', { id: uid(), name, exerciseIds: matchedIds });
-          msg.textContent = '保存しました';
-        });
-      } catch (e) {
-        out.innerHTML = `<p class="muted">エラー: ${escapeHtml(e.message)}</p>`;
       }
     });
   }
