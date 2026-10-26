@@ -26,10 +26,6 @@ export function currentSetHtml() {
     <button type="button" id="w-record" class="btn btn-primary rec-btn">記録する</button>
     <button type="button" id="w-drop" class="btn drop-btn">ドロップ</button>
   </div>
-  <div id="w-voice" class="mt-2" style="display:none">
-    <button type="button" id="w-voice-btn" class="btn voice-btn">🎤 音声で入力</button>
-    <div id="w-voice-status" class="muted mt-1"></div>
-  </div>
   <details class="card fold mt-2" id="w-cur-details">
     <summary><strong>詳細（補助回数・メモ）</strong></summary>
     <div class="field mt-2" id="w-cur-assist-wrap"><label>補助回数</label>
@@ -103,6 +99,5 @@ export function createCurrentSet(el, { getStep, onRecord, onDrop, onChipTap }) {
     setError(text) { el.querySelector('#w-cur-error').textContent = text; },
     setHint(text) { el.querySelector('#w-cur-hint').textContent = text; },
     clearDetails() { assistIn.value = ''; noteIn.value = ''; },
-    refreshStep: labelSteps,
   };
 }

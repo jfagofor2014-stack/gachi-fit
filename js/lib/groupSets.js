@@ -12,18 +12,3 @@ export function groupConsecutiveSets(sets) {
   }
   return result;
 }
-
-// 種目×ラウンドの入力値を、ラウンド→種目の順で埋まっているセルだけ抽出する（純粋関数）
-// exerciseIds: string[] / rounds: Array<Array<{weight:number, reps:number}>>（rounds[roundIndex][exerciseIndex]）
-export function flattenRounds(exerciseIds, rounds) {
-  const entries = [];
-  rounds.forEach((round) => {
-    exerciseIds.forEach((exerciseId, exIndex) => {
-      const cell = round[exIndex];
-      if (cell && cell.weight > 0 && cell.reps > 0) {
-        entries.push({ exerciseId, weight: cell.weight, reps: cell.reps });
-      }
-    });
-  });
-  return entries;
-}

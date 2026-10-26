@@ -7,7 +7,7 @@ const COURSE_TAB = '__course__';
 
 // 種目選択シート。部位タブ→種目タイルの2タップで選ぶ。exercises は絞り込み後の種目
 export function openExerciseSheet({
-  exercises, usage, currentExerciseId, suggestionId, courses, logState, onPick, onCourse, onStartSuperset,
+  exercises, usage, currentExerciseId, suggest, courses, logState, onPick, onCourse, onStartSuperset,
 }) {
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const parts = categoriesWithExercises(exercises, BODY_PARTS);
@@ -20,8 +20,11 @@ export function openExerciseSheet({
   sheet.className = 'ex-sheet';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-label', '種目を選ぶ');
+  sheet.setAttribute('aria-modal', 'true');
   document.body.appendChild(sheet);
-  const close = () => sheet.remove();
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { document.removeEventListener('keydown', onKey); sheet.remove(); };
+  document.addEventListener('keydown', onKey);
 
   function tilesFor(key) {
     if (key === COURSE_TAB) return courseIds.map((id) => byId.get(id));
@@ -29,7 +32,9 @@ export function openExerciseSheet({
   }
 
   function render() {
-    const suggestion = !picking && suggestionId && byId.get(suggestionId);
+    // コースを変えたら提案も変わるので、描くたびに求め直す
+    const suggestionId = picking ? null : suggest(courseIds);
+    const suggestion = suggestionId && byId.get(suggestionId);
     const tabs = [...(courseIds.length ? [COURSE_TAB] : []), ...parts];
     sheet.innerHTML = `
       <div class="ex-sheet-head">
@@ -89,4 +94,5 @@ export function openExerciseSheet({
     if (start) start.addEventListener('click', () => { const ids = picking; close(); onStartSuperset(ids); });
   }
   render();
+  sheet.querySelector('[data-close]').focus();
 }

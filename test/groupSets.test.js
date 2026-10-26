@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupConsecutiveSets, flattenRounds } from '../js/lib/groupSets.js';
+import { groupConsecutiveSets } from '../js/lib/groupSets.js';
 
 test('groupConsecutiveSets returns one entry per set when ungrouped', () => {
   const sets = [{ id: 'a' }, { id: 'b' }];
@@ -37,32 +37,4 @@ test('groupConsecutiveSets does not merge same groupId across a gap', () => {
 
 test('groupConsecutiveSets returns empty array for empty input', () => {
   assert.deepEqual(groupConsecutiveSets([]), []);
-});
-
-test('flattenRounds returns filled cells in round-major, exercise order', () => {
-  const entries = flattenRounds(['ex1', 'ex2'], [
-    [{ weight: 100, reps: 5 }, { weight: 50, reps: 8 }],
-    [{ weight: 90, reps: 6 }, { weight: 40, reps: 10 }],
-  ]);
-  assert.deepEqual(entries, [
-    { exerciseId: 'ex1', weight: 100, reps: 5 },
-    { exerciseId: 'ex2', weight: 50, reps: 8 },
-    { exerciseId: 'ex1', weight: 90, reps: 6 },
-    { exerciseId: 'ex2', weight: 40, reps: 10 },
-  ]);
-});
-
-test('flattenRounds skips cells with zero weight or reps', () => {
-  const entries = flattenRounds(['ex1', 'ex2'], [
-    [{ weight: 0, reps: 5 }, { weight: 50, reps: 0 }],
-    [{ weight: 90, reps: 6 }, { weight: 40, reps: 10 }],
-  ]);
-  assert.deepEqual(entries, [
-    { exerciseId: 'ex1', weight: 90, reps: 6 },
-    { exerciseId: 'ex2', weight: 40, reps: 10 },
-  ]);
-});
-
-test('flattenRounds returns empty array for empty rounds', () => {
-  assert.deepEqual(flattenRounds(['ex1'], []), []);
 });

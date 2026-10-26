@@ -66,13 +66,18 @@ export function lastDropChain(sets, workouts, exerciseId, today) {
 // 前回の同じ位置のドロップと同じ下げ幅。なければ刻み2つ分。刻み1つ分より下げない
 export function nextDropWeight({ currentWeight, dropIndex, lastChain, step }) {
   const hasPos = lastChain.length > dropIndex;
-  const decrement = hasPos ? lastChain[dropIndex - 1] - lastChain[dropIndex] : 2 * step;
+  const lastDecrement = hasPos ? lastChain[dropIndex - 1] - lastChain[dropIndex] : 0;
+  // 前回下げていなかった（同じ・上げた）位置は、刻み2つ分下げる
+  const decrement = lastDecrement > 0 ? lastDecrement : 2 * step;
   return round2(Math.max(step, currentWeight - decrement));
 }
 
-// 入力欄の文字列を数値に（全角数字可・解釈できない/負数は0・小数第2位で丸め）
+// 入力欄の文字列を数値に（全角数字・小数カンマ可・解釈できない/負数は0・小数第2位で丸め）
 export function parseNumberInput(text) {
-  const half = String(text ?? '').replace(/[０-９．]/g, (c) => (c === '．' ? '.' : String.fromCharCode(c.charCodeAt(0) - 0xfee0))).trim();
+  const half = String(text ?? '')
+    .replace(/[０-９．，]/g, (c) => (c === '．' ? '.' : c === '，' ? ',' : String.fromCharCode(c.charCodeAt(0) - 0xfee0)))
+    .replace(',', '.')
+    .trim();
   const n = parseFloat(half);
   if (!Number.isFinite(n) || n < 0) return 0;
   return round2(n);

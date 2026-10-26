@@ -112,3 +112,12 @@ test('openDropChain is empty once every set of the chain was deleted', () => {
   assert.deepEqual(openDropChain(sets, { exerciseId: 'e', groupId: 'g1', dropIndex: 1 }), []);
   assert.deepEqual(openDropChain(sets, null), []);
 });
+
+test('nextDropWeight never raises the weight when last time the chain did not go down', () => {
+  assert.equal(nextDropWeight({ currentWeight: 20, dropIndex: 1, lastChain: [20, 22], step: 2.5 }), 15);
+  assert.equal(nextDropWeight({ currentWeight: 20, dropIndex: 1, lastChain: [20, 20], step: 2.5 }), 15);
+});
+test('parseNumberInput accepts a decimal comma', () => {
+  assert.equal(parseNumberInput('26,5'), 26.5);
+  assert.equal(parseNumberInput('２６，５'), 26.5);
+});
