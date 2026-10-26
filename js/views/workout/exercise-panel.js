@@ -7,9 +7,9 @@ import { categoryKey, categoryVolumeForDate,
 // 記録タブ上部に固定する種目ヘッダー。タップで種目選択シートを開く
 export function exerciseHeaderHtml() {
   return `<div class="ex-header" id="w-ex-header">
-    <button type="button" class="ex-header-main" id="w-ex-toggle" aria-label="種目を選ぶ">
-      <div><span class="ex-part-label" id="w-ex-part"></span><span class="ex-header-name" id="w-ex-name">—</span></div>
-      <span class="caret">▾</span>
+    <button type="button" class="ex-header-main" id="w-ex-toggle" aria-haspopup="dialog">
+      <span><span class="ex-part-label" id="w-ex-part"></span><span class="ex-header-name" id="w-ex-name">—</span></span>
+      <span class="caret" aria-hidden="true">▾</span>
     </button>
     <div class="muted ex-course" id="w-ex-course" hidden></div>
     <div class="ex-header-stats">
@@ -25,9 +25,12 @@ export function exerciseHeaderHtml() {
 // 集計は全種目で行う（絞り込み後の種目だと過去のセットが「その他」に化ける）
 export function createExercisePanel(el, { allExercises, prs, onOpen }) {
   let currentId = null;
+  // 種目を続けて切り替えたとき、古い集計が新しい表示を上書きしないための番号
+  let refreshSeq = 0;
   el.querySelector('#w-ex-toggle').addEventListener('click', () => onOpen());
 
   async function refresh() {
+    const seq = ++refreshSeq;
     const ex = allExercises.find((e) => e.id === currentId);
     el.querySelector('#w-ex-name').textContent = ex ? ex.name : '—';
     el.querySelector('#w-ex-part').textContent = ex ? categoryKey(ex) : '';
@@ -43,6 +46,7 @@ export function createExercisePanel(el, { allExercises, prs, onOpen }) {
     const workouts = await getAll('workouts');
     const exById = Object.fromEntries(allExercises.map((e) => [e.id, e]));
     const wkById = Object.fromEntries(workouts.map((w) => [w.id, w]));
+    if (seq !== refreshSeq) return;
     const today = localDateStr();
     const todayVol = categoryVolumeForDate(sets, exById, wkById, today)[cat] || 0;
     const pastMax = maxCategoryVolumeExcludingDate(sets, exById, wkById, today, VOLUME_START_DATE)[cat] || 0;

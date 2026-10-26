@@ -121,7 +121,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
   });
 
   // ---- 1セットずつ記録する ----
-  const today = todayStr();
+  let today = todayStr();
   let workouts = await getAll('workouts');
   let todayWorkoutId = todayWorkout ? todayWorkout.id : null;
   const logState = loadLogState(today);
@@ -173,11 +173,27 @@ export async function renderWorkout(el, navigate, opts = {}) {
     card.setHint(isBodyweight && !bodyWeightNow ? '体重が未登録です。重量欄に体重を入力してください' : '');
   }
 
+  // 画面を開いたまま日付が変わったら、その日の状態（組・連なり・コース）を新しい日のものにする
+  function rollDayIfNeeded() {
+    const now = todayStr();
+    if (now === today) return false;
+    today = now;
+    todayWorkoutId = null;
+    Object.assign(logState, loadLogState(today));
+    return true;
+  }
+
   async function record(isDrop) {
     if (busy || !currentExId) return;
+    if (rollDayIfNeeded()) { showContext(); loadCard(currentExId); }
     const v = card.values();
     if (!(v.weight > 0) || !(v.reps > 0)) { card.setError('重量と回数を入れてください'); return; }
-    const assisted = dropActiveFor(currentExId) || isDrop ? 0 : v.assistedReps;
+    // 保存を待つ間に種目や組が変わっても、押した時点の種目・組・連なりで保存する
+    const exId = currentExId;
+    const ss = supersetActive() ? logState.superset : null;
+    const chainGroupId = !ss && dropActiveFor(exId) ? logState.drop.groupId : null;
+    // 連なりの2件目以降は補助回数を持たない。最初の1件は入力どおり保存する
+    const assisted = chainGroupId ? 0 : v.assistedReps;
     if (assisted > v.reps) { card.setError('補助回数は回数以下にしてください'); return; }
     busy = true;
     card.setBusy(true);
@@ -188,18 +204,18 @@ export async function renderWorkout(el, navigate, opts = {}) {
       todayWorkoutId = workout.id;
       if (!workouts.some((w) => w.id === workout.id)) workouts = [...workouts, workout];
       const set = {
-        id: uid(), workoutId: workout.id, exerciseId: currentExId, weight: v.weight, reps: v.reps,
+        id: uid(), workoutId: workout.id, exerciseId: exId, weight: v.weight, reps: v.reps,
         assistedReps: assisted, estimated1RM: estimate1RM(v.weight, v.reps - assisted),
-        targetWeight: prs[currentExId] || null, createdAt: Date.now(),
+        targetWeight: prs[exId] || null, createdAt: Date.now(),
       };
-      const ss = supersetActive() ? logState.superset : null;
+      let newChain = null;
       if (ss) {
         set.groupId = ss.groupId; set.groupType = 'superset';
-      } else if (dropActiveFor(currentExId)) {
-        set.groupId = logState.drop.groupId; set.groupType = 'dropset';
+      } else if (chainGroupId) {
+        set.groupId = chainGroupId; set.groupType = 'dropset';
       } else if (isDrop) {
-        logState.drop = { exerciseId: currentExId, groupId: uid(), dropIndex: 0 };
-        set.groupId = logState.drop.groupId; set.groupType = 'dropset';
+        newChain = { exerciseId: exId, groupId: uid(), dropIndex: 0 };
+        set.groupId = newChain.groupId; set.groupType = 'dropset';
       }
       await put('sets', set);
       allSets.push(set);
@@ -207,9 +223,12 @@ export async function renderWorkout(el, navigate, opts = {}) {
       // メモの保存や画面の更新で失敗しても、セットは保存済み。「保存できませんでした」とは出さない
       try { await put('sensoryLogs', { id: uid(), setId: set.id, note: v.note }); } catch { /* メモだけ失う */ }
       const est = set.estimated1RM;
-      if (!(prs[currentExId] >= est)) prs[currentExId] = est;
+      if (!(prs[exId] >= est)) prs[exId] = est;
       card.clearDetails();
-      if (ss) {
+      if (currentExId !== exId) {
+        // 保存中に別の種目へ切り替えられた。状態は進めず、今の種目の表示だけ更新する
+        loadCard(currentExId);
+      } else if (ss) {
         // 組の次の種目へ。組の最後を記録したら休憩に入り、最初の種目へ戻る
         const next = (ss.index + 1) % ss.exerciseIds.length;
         if (next === 0) startRest();
@@ -217,22 +236,20 @@ export async function renderWorkout(el, navigate, opts = {}) {
         saveLogState(logState);
         goTo(ss.exerciseIds[next]);
       } else if (isDrop) {
+        if (newChain) logState.drop = newChain;
         logState.drop.dropIndex += 1;
         saveLogState(logState);
-        loadCard(currentExId);
+        loadCard(exId);
       } else {
         closeDrop();
         startRest();
-        loadCard(currentExId);
+        loadCard(exId);
       }
       await renderToday(el, allExercises, reloadAfterEdit);
       await exPanel.refresh();
     } catch (e) {
-      if (!saved) {
-        // 札は増やさない
-        if (isDrop && logState.drop && logState.drop.dropIndex === 0) closeDrop();
-        if (el.isConnected) card.setError('保存できませんでした: ' + e.message);
-      }
+      // 保存できなかったときだけ知らせる。札は増やさない
+      if (!saved && el.isConnected) card.setError('保存できませんでした: ' + e.message);
     } finally {
       busy = false;
       card.setBusy(false);
@@ -242,6 +259,8 @@ export async function renderWorkout(el, navigate, opts = {}) {
   // 札や「本日のセット」で編集・削除したら、DBから読み直して描き直す
   async function reloadAfterEdit() {
     allSets.splice(0, allSets.length, ...(await getAll('sets')));
+    // 消したセットのPRが残らないよう、作り直してから入れ替える
+    for (const k of Object.keys(prs)) delete prs[k];
     Object.assign(prs, computePRs(allSets));
     loadCard(currentExId);
     await renderToday(el, allExercises, reloadAfterEdit);
@@ -312,8 +331,8 @@ export async function renderWorkout(el, navigate, opts = {}) {
       exercises,
       usage: exerciseUsage(allSets, workouts, today),
       currentExerciseId: currentExId,
-      suggestionId: suggestNext({
-        courseIds: logState.courseIds, currentExerciseId: currentExId, doneTodayIds: doneTodayIds(),
+      suggest: (courseIds) => suggestNext({
+        courseIds, currentExerciseId: currentExId, doneTodayIds: doneTodayIds(),
         sets: allSets, workouts, today, availableIds: visibleIds(),
       }),
       courses,
