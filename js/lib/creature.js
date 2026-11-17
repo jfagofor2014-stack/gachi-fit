@@ -5,7 +5,7 @@ import { localDateStr } from './localdate.js';
 
 // ---- 調整用の定数（ルールを変えるときはここだけ直す） ----
 export const WEEKLY_GOAL = 2;       // 週の目標回数
-export const SESSION_MIN = 30;      // 達成とみなす所要時間（分）
+export const SESSION_SETS = 8;      // 達成とみなす1日のセット数（自宅トレは時間の推定が短く出るためセット数で判定する）
 export const LEAD_IN_MIN = 5;       // 自動推定に足す分（最初の種目をやっている間は記録が出ないため）
 export const START_POWER = 10;      // 開始時の強さ（ベビー）
 export const GAIN_FULL = 10;        // 目標回数を達成した週の増加
@@ -87,7 +87,7 @@ export function buildSessions(workouts, sets) {
   for (const [date, g] of byDate) {
     if (!g.sets.length) continue;
     const minutes = sessionMinutes(g.sets, g.workouts);
-    out.push({ date, minutes, qualifies: minutes >= SESSION_MIN });
+    out.push({ date, minutes, sets: g.sets.length, qualifies: g.sets.length >= SESSION_SETS });
   }
   return out.sort((a, b) => (a.date < b.date ? -1 : 1));
 }

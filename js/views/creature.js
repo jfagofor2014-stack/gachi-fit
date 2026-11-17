@@ -3,7 +3,7 @@ import { escapeHtml } from '../lib/html.js';
 import { localDateStr } from '../lib/localdate.js';
 import {
   computeCreature, weekStart, addDays, daysLeftInWeek, nextEvolutionIn, STAGE_NAMES,
-  WEEKLY_GOAL, SESSION_MIN, LEAD_IN_MIN, GAIN_FULL, LOSS_ONE, LOSS_ZERO, BONUS_PER_EVENT, MAX_EVENTS,
+  WEEKLY_GOAL, SESSION_SETS, GAIN_FULL, LOSS_ONE, LOSS_ZERO, BONUS_PER_EVENT, MAX_EVENTS,
 } from '../lib/creature.js';
 import { monsterSvg } from '../lib/creatureArt.js';
 
@@ -38,7 +38,7 @@ function weekMessage(c, today) {
 
 function weekRowHtml(w) {
   const sessions = w.sessions.length
-    ? w.sessions.map((s) => `${md(s.date)} ${Math.floor(s.minutes)}分${s.qualifies ? ' ✔' : ''}`).join('　')
+    ? w.sessions.map((s) => `${md(s.date)} ${s.sets}セット${s.qualifies ? ' ✔' : ''}`).join('　')
     : '記録なし';
   return `<div class="creature-week-row">
     <div class="list-item" style="border:none;padding:0">
@@ -52,7 +52,7 @@ function weekRowHtml(w) {
 
 const RULES_HTML = `<div class="muted" style="margin-top:10px;font-size:13px;line-height:1.7">
   <div>・週は月曜〜日曜。週が終わってから強さが増減します</div>
-  <div>・トレーニングした日の所要時間が${SESSION_MIN}分以上で「達成」。手入力の開始・終了があればそれを使い、なければ最初と最後の記録の間隔に${LEAD_IN_MIN}分を足します</div>
+  <div>・1日に${SESSION_SETS}セット以上記録した日が「達成」</div>
   <div>・週${WEEKLY_GOAL}回以上で＋${GAIN_FULL}、1回で−${LOSS_ONE}、0回で−${LOSS_ZERO}。お休みの週は増減なし</div>
   <div>・自己ベスト（推定1RMか、同じ重量以上での最大回数）を更新した種目1つにつき＋${BONUS_PER_EVENT}（週${MAX_EVENTS}種目まで。1回以上達成した週のみ）</div>
 </div>`;
