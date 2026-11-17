@@ -78,15 +78,12 @@ test('sessionMinutes ignores a zero or missing manual duration', () => {
 
 // ---- トレーニングした日 ----
 
-test('buildSessions groups sets by the date of their workout and judges the 30 minute threshold', () => {
+test('buildSessions groups sets by the date of their workout and judges the 8-set threshold', () => {
   const workouts = [{ id: 'a', date: '2026-10-06' }, { id: 'b', date: '2026-10-07' }];
-  const sets = [
-    { workoutId: 'a', createdAt: 0 }, { workoutId: 'a', createdAt: 25 * MIN }, // 30分
-    { workoutId: 'b', createdAt: 0 }, { workoutId: 'b', createdAt: 24 * MIN }, // 29分
-  ];
-  assert.deepEqual(buildSessions(workouts, sets), [
-    { date: '2026-10-06', minutes: 30, qualifies: true },
-    { date: '2026-10-07', minutes: 29, qualifies: false },
+  const day = (workoutId, n) => Array.from({ length: n }, (_, i) => ({ workoutId, createdAt: i * MIN }));
+  assert.deepEqual(buildSessions(workouts, [...day('a', 8), ...day('b', 7)]), [
+    { date: '2026-10-06', minutes: 12, sets: 8, qualifies: true },
+    { date: '2026-10-07', minutes: 11, sets: 7, qualifies: false },
   ]);
 });
 
@@ -175,16 +172,15 @@ test('progressExerciseIds treats a set on the first day of the week as in-week, 
 let seq = 0;
 const EXERCISES = ['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7'].map((id) => ({ id }));
 
-// その日に所要 minutes 分（5以上）のトレーニングを1回作る。e1 を 50kg×10 で2セット。
-// extra は { exerciseId, weight, reps } の追加セット（最初のセットと同時刻）
-function mk(date, minutes, extra = []) {
+// その日に e1 を 50kg×10 で count セット（2分おき）のトレーニングを1回作る。
+// extra は { exerciseId, weight, reps } の追加セット（最初のセットと同時刻、セット数に数える）
+function mk(date, count, extra = []) {
   const id = `w${seq++}`;
   const base = { workoutId: id, assistedReps: 0 };
   return {
     workout: { id, date },
     sets: [
-      { ...base, id: `${id}a`, exerciseId: 'e1', weight: 50, reps: 10, createdAt: T0 },
-      { ...base, id: `${id}b`, exerciseId: 'e1', weight: 50, reps: 10, createdAt: T0 + (minutes - 5) * MIN },
+      ...Array.from({ length: count }, (_, i) => ({ ...base, id: `${id}s${i}`, exerciseId: 'e1', weight: 50, reps: 10, createdAt: T0 + i * 2 * MIN })),
       ...extra.map((x, i) => ({ ...base, id: `${id}x${i}`, createdAt: T0, ...x })),
     ],
   };
@@ -203,7 +199,7 @@ test('computeCreature starts at the starting power and does not move during the 
 });
 
 test('computeCreature gains power for each week that reached the goal', () => {
-  const items = [mk('2026-10-06', 40), mk('2026-10-09', 35), mk('2026-10-13', 40), mk('2026-10-16', 40)];
+  const items = [mk('2026-10-06', 8), mk('2026-10-09', 8), mk('2026-10-13', 8), mk('2026-10-16', 8)];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.equal(c.power, 30);
   assert.equal(c.stage, 2);
@@ -216,7 +212,7 @@ test('computeCreature gains power for each week that reached the goal', () => {
 });
 
 test('computeCreature loses a little for a week with one qualifying day', () => {
-  const c = run([mk('2026-10-06', 40)], { startWeek: '2026-10-05', today: '2026-10-12' });
+  const c = run([mk('2026-10-06', 8)], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(c.power, 5);
   assert.equal(c.weeks[0].delta, -5);
   assert.equal(c.mood, 'normal');
@@ -229,22 +225,22 @@ test('computeCreature loses a lot for a week with no qualifying day, and floors 
   assert.equal(c.mood, 'shobori');
 });
 
-test('computeCreature does not count a short day as qualifying', () => {
-  const c = run([mk('2026-10-06', 29), mk('2026-10-08', 29)], { startWeek: '2026-10-05', today: '2026-10-12' });
+test('computeCreature does not count a day with fewer than 8 sets as qualifying', () => {
+  const c = run([mk('2026-10-06', 7), mk('2026-10-08', 7)], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(c.weeks[0].qualified, 0);
   assert.equal(c.weeks[0].delta, -15);
   assert.equal(c.weeks[0].sessions.length, 2);
 });
 
-test('computeCreature counts exactly 30 minutes as qualifying', () => {
-  const c = run([mk('2026-10-06', 30), mk('2026-10-08', 30)], { startWeek: '2026-10-05', today: '2026-10-12' });
+test('computeCreature counts exactly 8 sets as qualifying', () => {
+  const c = run([mk('2026-10-06', 8), mk('2026-10-08', 8)], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(c.weeks[0].qualified, 2);
 });
 
 test('computeCreature adds a bonus for an exercise that set a personal best', () => {
   const items = [
-    mk('2026-10-06', 40, [{ exerciseId: 'e2', weight: 50, reps: 10 }]), mk('2026-10-09', 40),
-    mk('2026-10-13', 40, [{ exerciseId: 'e2', weight: 50, reps: 12 }]), mk('2026-10-16', 40),
+    mk('2026-10-06', 8, [{ exerciseId: 'e2', weight: 50, reps: 10 }]), mk('2026-10-09', 8),
+    mk('2026-10-13', 8, [{ exerciseId: 'e2', weight: 50, reps: 12 }]), mk('2026-10-16', 8),
   ];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.deepEqual(c.weeks[0].events, []);
@@ -256,8 +252,8 @@ test('computeCreature adds a bonus for an exercise that set a personal best', ()
 test('computeCreature caps the bonus at three exercises', () => {
   const ids = ['e3', 'e4', 'e5', 'e6', 'e7'];
   const items = [
-    mk('2026-10-06', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 10 }))), mk('2026-10-09', 40),
-    mk('2026-10-13', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 11 }))), mk('2026-10-16', 40),
+    mk('2026-10-06', 8, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 10 }))), mk('2026-10-09', 8),
+    mk('2026-10-13', 8, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 11 }))), mk('2026-10-16', 8),
   ];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.equal(c.weeks[1].events.length, 5);
@@ -267,8 +263,8 @@ test('computeCreature caps the bonus at three exercises', () => {
 
 test('computeCreature gives no bonus in a week without a qualifying day', () => {
   const items = [
-    mk('2026-10-06', 40, [{ exerciseId: 'e2', weight: 50, reps: 10 }]), mk('2026-10-09', 40),
-    mk('2026-10-13', 5, [{ exerciseId: 'e2', weight: 60, reps: 10 }]),
+    mk('2026-10-06', 8, [{ exerciseId: 'e2', weight: 50, reps: 10 }]), mk('2026-10-09', 8),
+    mk('2026-10-13', 1, [{ exerciseId: 'e2', weight: 60, reps: 10 }]),
   ];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.deepEqual(c.weeks[1].events, ['e2']);
@@ -277,7 +273,7 @@ test('computeCreature gives no bonus in a week without a qualifying day', () => 
 });
 
 test('computeCreature gives the same gain for three qualifying days as for two', () => {
-  const items = [mk('2026-10-06', 40), mk('2026-10-08', 40), mk('2026-10-10', 40)];
+  const items = [mk('2026-10-06', 8), mk('2026-10-08', 8), mk('2026-10-10', 8)];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(c.weeks[0].qualified, 3);
   assert.equal(c.power, 20);
@@ -303,7 +299,7 @@ test('computeCreature clamps power at 100', () => {
 });
 
 test('computeCreature ignores records before the start week', () => {
-  const items = [mk('2026-10-06', 40), mk('2026-10-08', 40)];
+  const items = [mk('2026-10-06', 8), mk('2026-10-08', 8)];
   const c = run(items, { startWeek: '2026-10-12', today: '2026-10-19' });
   assert.equal(c.weeks[0].weekStart, '2026-10-12');
   assert.equal(c.weeks[0].sessions.length, 0);
@@ -311,14 +307,14 @@ test('computeCreature ignores records before the start week', () => {
 });
 
 test('computeCreature is happy when the current week already reached the goal', () => {
-  const items = [mk('2026-10-13', 40), mk('2026-10-14', 40)];
+  const items = [mk('2026-10-13', 8), mk('2026-10-14', 8)];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-15' });
   assert.equal(c.power, 0); // 1週目が0回で下がり、今週はまだ動かない
   assert.equal(c.mood, 'genki');
 });
 
 test('computeCreature takes the mood from the last closed non-rest week otherwise', () => {
-  const one = run([mk('2026-10-06', 40)], { startWeek: '2026-10-05', today: '2026-10-12' });
+  const one = run([mk('2026-10-06', 8)], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(one.mood, 'normal');
   const none = run([], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.equal(none.mood, 'shobori');
@@ -331,11 +327,11 @@ test('computeCreature treats a start week in the future as the current week', ()
   assert.equal(c.power, 10);
 });
 
-test('computeCreature lists the sessions of each week with their minutes', () => {
-  const c = run([mk('2026-10-06', 38), mk('2026-10-09', 24)], { startWeek: '2026-10-05', today: '2026-10-12' });
+test('computeCreature lists the sessions of each week with their set counts', () => {
+  const c = run([mk('2026-10-06', 9), mk('2026-10-09', 3)], { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.deepEqual(c.weeks[0].sessions, [
-    { date: '2026-10-06', minutes: 38, qualifies: true },
-    { date: '2026-10-09', minutes: 24, qualifies: false },
+    { date: '2026-10-06', minutes: 21, sets: 9, qualifies: true },
+    { date: '2026-10-09', minutes: 9, sets: 3, qualifies: false },
   ]);
 });
 
@@ -377,8 +373,8 @@ test('computeCreature normalizes a start week that is not a Monday', () => {
 
 test('computeCreature uses records before the start week as the personal best baseline', () => {
   const items = [
-    mk('2026-09-29', 40, [{ exerciseId: 'e2', weight: 50, reps: 10 }]),
-    mk('2026-10-06', 40, [{ exerciseId: 'e2', weight: 50, reps: 12 }]), mk('2026-10-08', 40),
+    mk('2026-09-29', 8, [{ exerciseId: 'e2', weight: 50, reps: 10 }]),
+    mk('2026-10-06', 8, [{ exerciseId: 'e2', weight: 50, reps: 12 }]), mk('2026-10-08', 8),
   ];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-12' });
   assert.deepEqual(c.weeks[0].events, ['e2']);
@@ -386,7 +382,7 @@ test('computeCreature uses records before the start week as the personal best ba
 });
 
 test('computeCreature puts Sunday in its own week and Monday in the next', () => {
-  const c = run([mk('2026-10-11', 40), mk('2026-10-12', 40)], { startWeek: '2026-10-05', today: '2026-10-19' });
+  const c = run([mk('2026-10-11', 8), mk('2026-10-12', 8)], { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.deepEqual(c.weeks[0].sessions.map((s) => s.date), ['2026-10-11']);
   assert.deepEqual(c.weeks[1].sessions.map((s) => s.date), ['2026-10-12']);
 });
@@ -394,8 +390,8 @@ test('computeCreature puts Sunday in its own week and Monday in the next', () =>
 test('computeCreature can come out ahead in a week with one qualifying day when the bonus is full', () => {
   const ids = ['e3', 'e4', 'e5'];
   const items = [
-    mk('2026-10-06', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 10 }))), mk('2026-10-08', 40),
-    mk('2026-10-13', 40, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 11 }))),
+    mk('2026-10-06', 8, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 10 }))), mk('2026-10-08', 8),
+    mk('2026-10-13', 8, ids.map((exerciseId) => ({ exerciseId, weight: 50, reps: 11 }))),
   ];
   const c = run(items, { startWeek: '2026-10-05', today: '2026-10-19' });
   assert.equal(c.weeks[1].qualified, 1);

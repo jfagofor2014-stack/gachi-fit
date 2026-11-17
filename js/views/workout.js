@@ -47,7 +47,7 @@ export async function renderWorkout(el, navigate, opts = {}) {
   const courses = (await getAll('courses')).filter((c) => courseAvailable(c, allExercises, env));
   const bodyWeightNow = latestBodyWeight(await getAll('bodyWeights'));
   const todayWorkout = (await getAll('workouts')).find((w) => w.date === todayStr());
-  const defaultSec = parseInt(localStorage.getItem('default_interval_sec') || '90', 10);
+  const defaultSec = parseInt(localStorage.getItem('default_interval_sec') || '120', 10);
   const intervalChoices = [60, 90, 120, 180];
 
   if (!exercises.length) {

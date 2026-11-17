@@ -24,7 +24,7 @@ export async function renderSettings(el) {
     <div class="card">
       <strong>既定インターバル秒数</strong>
       <p class="muted">記録タブのインターバルの初期値。</p>
-      <input id="s-int" type="number" class="input" value="${localStorage.getItem('default_interval_sec') || '90'}" min="1" max="600" />
+      <input id="s-int" type="number" class="input" value="${localStorage.getItem('default_interval_sec') || '120'}" min="1" max="600" />
       <button id="s-int-save" class="btn btn-primary btn-block" style="margin-top:10px">秒数を保存</button>
     </div>
 
